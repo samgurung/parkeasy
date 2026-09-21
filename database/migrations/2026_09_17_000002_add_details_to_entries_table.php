@@ -15,12 +15,18 @@ return new class extends Migration
             $table->string('mobile_number', 10)->nullable()->after('vehicle_number');
         });
 
-        DB::statement("ALTER TABLE entries MODIFY status ENUM('awaiting_details', 'parked', 'exited') NOT NULL DEFAULT 'awaiting_details'");
+        // SQLite doesn't support ALTER ... MODIFY with ENUM; the enum is
+        // only a soft hint on MySQL anyway, so skip it on other drivers.
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE entries MODIFY status ENUM('awaiting_details', 'parked', 'exited') NOT NULL DEFAULT 'awaiting_details'");
+        }
     }
 
     public function down(): void
     {
-        DB::statement("ALTER TABLE entries MODIFY status ENUM('inside', 'exited') NOT NULL DEFAULT 'inside'");
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+            DB::statement("ALTER TABLE entries MODIFY status ENUM('inside', 'exited') NOT NULL DEFAULT 'inside'");
+        }
 
         Schema::table('entries', function (Blueprint $table) {
             $table->dropColumn(['driver_name', 'vehicle_number', 'mobile_number']);
