@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Entry;
+use App\Models\Kiosk;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Component;
@@ -11,8 +12,27 @@ class Home extends Component
 {
     public function render()
     {
+        // The kiosk is tied to a parking lot via its admin-registered key (?kiosk=<key>),
+        // so every scan made from this page reports the correct lot number. Persist the
+        // key in the session so navigation back to / from other pages keeps the kiosk.
+        $kioskKey = (string) request()->query('kiosk');
+
+        if ($kioskKey !== '') {
+            session(['kiosk_key' => $kioskKey]);
+        } else {
+            $kioskKey = (string) session('kiosk_key', '');
+        }
+
+        $kiosk = Kiosk::with('parkingLot')
+            ->where('key', $kioskKey)
+            ->first();
+
         return view('livewire.home', [
             'recentScans' => $this->recentScans(),
+            'kioskKey' => $kiosk?->key,
+            'kioskName' => $kiosk?->name,
+            'kioskLotNumber' => $kiosk?->parkingLot?->lot_number,
+            'kioskLotName' => $kiosk?->parkingLot?->name,
         ]);
     }
 

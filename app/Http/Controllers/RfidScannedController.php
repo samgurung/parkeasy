@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Events\RfidScanned;
 use App\Models\Entry;
+use App\Models\ParkingLot;
 use App\Models\Vehicle;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
@@ -22,16 +24,24 @@ class RfidScannedController extends Controller
         $data = $request->validate([
             'rfid_id' => 'required|string',
             'type' => 'sometimes|string|in:entry,exit',
+            'lot' => 'required|integer|min:1',
+            'kiosk' => 'sometimes|string',
         ]);
 
         $rfid = $data['rfid_id'];
-        // The external reader scans without a type; use whichever direction is armed on the kiosk.
-        // The mode stays armed across scans until the attendant switches or clears it.
-        $type = $data['type'] ?? Cache::get(self::ARMED_MODE_CACHE_KEY);
+        // The external reader scans without a type; use whichever direction is armed on the
+        // kiosk. The mode stays armed for the whole shift and is scoped to the kiosk so one
+        // kiosk arming ENTRY never changes how another kiosk scans.
+        $type = $data['type'] ?? Cache::get($this->armedModeKey($data['kiosk'] ?? null));
+
+        $lot = $this->lotFromNumber($data['lot']);
+        if ($lot instanceof JsonResponse) {
+            return $lot;
+        }
 
         // Without a direction we can't tell an entry from an exit, so refuse the scan instead of guessing.
         if (! $type) {
-            broadcast(new RfidScanned($rfid, 'error', 'Select ENTRY or EXIT before scanning'));
+            broadcast(new RfidScanned($rfid, 'error', 'Select ENTRY or EXIT before scanning', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
 
             return response()->json([
                 'success' => false,
@@ -44,7 +54,7 @@ class RfidScannedController extends Controller
         if (! $vehicle) {
             // Exiting an unregistered card is always an error; only entry offers registration.
             if ($type === 'exit') {
-                broadcast(new RfidScanned($rfid, 'error', 'Card not registered'));
+                broadcast(new RfidScanned($rfid, 'error', 'Card not registered', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
 
                 return response()->json([
                     'success' => false,
@@ -52,12 +62,14 @@ class RfidScannedController extends Controller
                 ], 404);
             }
 
-            broadcast(new RfidScanned($rfid, 'unregistered', 'Card not registered'));
+            broadcast(new RfidScanned($rfid, 'unregistered', 'Card not registered', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
 
             return response()->json([
                 'success' => false,
                 'status' => 'unregistered',
                 'rfid_id' => $rfid,
+                'lot' => $lot->lot_number,
+                'lot_name' => $lot->name,
                 'error' => 'Card not registered',
             ], 404);
         }
@@ -70,7 +82,7 @@ class RfidScannedController extends Controller
 
         if ($type === 'exit') {
             if (! $activeEntry) {
-                broadcast(new RfidScanned($rfid, 'error', 'No active entry for this card'));
+                broadcast(new RfidScanned($rfid, 'error', 'No active entry for this card', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
 
                 return response()->json([
                     'success' => false,
@@ -78,12 +90,23 @@ class RfidScannedController extends Controller
                 ], 422);
             }
 
-            return $this->closeEntry($vehicle, $activeEntry, $rfid);
+            // A parked card is bound to the lot where it entered; it can only be
+            // checked out from that lot's exit kiosk.
+            if ($activeEntry->parking_lot_id && $activeEntry->parking_lot_id !== $lot->id) {
+                broadcast(new RfidScanned($rfid, 'error', 'Vehicle is parked at a different lot', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
+
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Vehicle is parked at a different lot',
+                ], 422);
+            }
+
+            return $this->closeEntry($vehicle, $activeEntry, $rfid, $lot, $data['kiosk'] ?? null);
         }
 
         // $type === 'entry', but the card is still inside
         if ($activeEntry) {
-            broadcast(new RfidScanned($rfid, 'error', 'Card is already inside'));
+            broadcast(new RfidScanned($rfid, 'error', 'Card is already inside', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
 
             return response()->json([
                 'success' => false,
@@ -92,12 +115,14 @@ class RfidScannedController extends Controller
         }
 
         // The entry is created only after the parking details are submitted.
-        broadcast(new RfidScanned($rfid, 'details_required'));
+        broadcast(new RfidScanned($rfid, 'details_required', null, null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
 
         return response()->json([
             'success' => true,
             'status' => 'details_required',
             'rfid_id' => $rfid,
+            'lot' => $lot->lot_number,
+            'lot_name' => $lot->name,
             'time' => now()->toDateTimeString(),
         ]);
     }
@@ -109,7 +134,14 @@ class RfidScannedController extends Controller
             'name' => 'required|string|max:255',
             'phone' => 'required|digits:10',
             'vehicle_number' => 'required|string|max:255',
+            'lot' => 'required|integer|min:1',
+            'kiosk' => 'sometimes|string',
         ]);
+
+        $lot = $this->lotFromNumber($data['lot']);
+        if ($lot instanceof JsonResponse) {
+            return $lot;
+        }
 
         $vehicle = Vehicle::create([
             'rfid_id' => $data['rfid_id'],
@@ -124,9 +156,10 @@ class RfidScannedController extends Controller
             'mobile_number' => $data['phone'],
             'vehicle_number' => strtoupper($data['vehicle_number']),
             'status' => 'parked',
+            'parking_lot_id' => $lot->id,
         ]);
 
-        broadcast(new RfidScanned($vehicle->rfid_id, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name));
+        broadcast(new RfidScanned($vehicle->rfid_id, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name, $data['kiosk'] ?? null, $lot->lot_number));
 
         return response()->json([
             'success' => true,
@@ -135,6 +168,8 @@ class RfidScannedController extends Controller
             'rfid_id' => $vehicle->rfid_id,
             'vehicle_number' => $entry->vehicle_number,
             'driver_name' => $entry->driver_name,
+            'lot' => $lot->lot_number,
+            'lot_name' => $lot->name,
             'time' => now()->toDateTimeString(),
         ]);
     }
@@ -146,7 +181,14 @@ class RfidScannedController extends Controller
             'driver_name' => 'required|string|max:255',
             'vehicle_number' => 'required|string|max:255',
             'mobile_number' => 'required|string|max:10',
+            'lot' => 'required|integer|min:1',
+            'kiosk' => 'sometimes|string',
         ]);
+
+        $lot = $this->lotFromNumber($data['lot']);
+        if ($lot instanceof JsonResponse) {
+            return $lot;
+        }
 
         $vehicle = Vehicle::where('rfid_id', $data['rfid_id'])->firstOrFail();
         $activeEntry = $vehicle->entries()
@@ -168,11 +210,12 @@ class RfidScannedController extends Controller
             'vehicle_number' => $data['vehicle_number'],
             'mobile_number' => $data['mobile_number'],
             'status' => 'parked',
+            'parking_lot_id' => $lot->id,
         ]);
 
         $rfid = $vehicle->rfid_id;
 
-        broadcast(new RfidScanned($rfid, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name));
+        broadcast(new RfidScanned($rfid, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name, $data['kiosk'] ?? null, $lot->lot_number));
 
         return response()->json([
             'success' => true,
@@ -181,11 +224,27 @@ class RfidScannedController extends Controller
             'rfid_id' => $rfid,
             'vehicle_number' => $entry->vehicle_number,
             'driver_name' => $entry->driver_name,
+            'lot' => $lot->lot_number,
+            'lot_name' => $lot->name,
             'time' => now()->toDateTimeString(),
         ]);
     }
 
-    protected function closeEntry(Vehicle $vehicle, Entry $activeEntry, string $rfid)
+    protected function lotFromNumber(int $lotNumber): JsonResponse|ParkingLot
+    {
+        $lot = ParkingLot::where('lot_number', $lotNumber)->first();
+
+        if (! $lot) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Lot not found. Configure it in the admin panel first.',
+            ], 404);
+        }
+
+        return $lot;
+    }
+
+    protected function closeEntry(Vehicle $vehicle, Entry $activeEntry, string $rfid, ?ParkingLot $lot = null, ?string $kioskKey = null)
     {
         $exitTime = now();
         $amount = $this->calculateFee($activeEntry->entry_time, $exitTime);
@@ -196,7 +255,7 @@ class RfidScannedController extends Controller
             'amount' => $amount,
         ]);
 
-        broadcast(new RfidScanned($rfid, 'exit', null, $activeEntry->id, $amount, $activeEntry->vehicle_number, $activeEntry->driver_name));
+        broadcast(new RfidScanned($rfid, 'exit', null, $activeEntry->id, $amount, $activeEntry->vehicle_number, $activeEntry->driver_name, $kioskKey, $lot?->lot_number ?? $activeEntry->parking_lot_id));
 
         return response()->json([
             'success' => true,
@@ -221,15 +280,23 @@ class RfidScannedController extends Controller
     {
         $data = $request->validate([
             'mode' => 'nullable|string|in:entry,exit',
+            'kiosk' => 'sometimes|string',
         ]);
 
+        $cacheKey = $this->armedModeKey($data['kiosk'] ?? null);
+
         if (empty($data['mode'])) {
-            Cache::forget(self::ARMED_MODE_CACHE_KEY);
+            Cache::forget($cacheKey);
         } else {
             // Long TTL: the mode is meant to stay armed for an entire shift of scans, not a single one.
-            Cache::put(self::ARMED_MODE_CACHE_KEY, $data['mode'], now()->addHours(12));
+            Cache::put($cacheKey, $data['mode'], now()->addHours(12));
         }
 
         return response()->json(['success' => true]);
+    }
+
+    protected function armedModeKey(?string $kioskKey): string
+    {
+        return $kioskKey ? 'kiosk:'.$kioskKey.':armed_mode' : self::ARMED_MODE_CACHE_KEY;
     }
 }

@@ -14,7 +14,7 @@
 
     <div class="relative z-10 flex w-full max-w-6xl flex-1 flex-col mx-auto px-6 py-6">
 
-        <header class="flex items-center justify-between gap-4">
+        <header class="relative flex items-center justify-between gap-4">
             <div class="flex items-center gap-3">
                 <span
                     class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 text-2xl text-white shadow-lg shadow-blue-500/40">
@@ -27,7 +27,7 @@
                 </div>
             </div>
             <div class="flex items-center gap-4">
-                <nav class="flex flex-col items-stretch gap-2 sm:flex-row">
+                <nav class="hidden items-stretch gap-2 lg:flex">
                     <a href="{{ route('lots.overview') }}"
                         class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
                         <i class="fas fa-chart-line"></i> Lot Report
@@ -40,18 +40,78 @@
                         class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
                         <i class="fas fa-building"></i> Parking Lots
                     </a>
+                    <a href="{{ route('admin.kiosks') }}"
+                        class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
+                        <i class="fas fa-id-card"></i> Kiosks
+                    </a>
                     <a href="{{ route('admin.floors') }}"
                         class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
                         <i class="fas fa-gear"></i> Configure
                     </a>
                 </nav>
-                <div class="text-right">
-                    <div id="kiosk-clock" class="text-3xl font-bold tabular-nums drop-shadow"></div>
+                <div class="text-right hidden lg:block">
+                    <div id="kiosk-clock" class="text-xl font-bold tabular-nums drop-shadow"></div>
                     <div id="kiosk-date" class="text-xs text-white/60"></div>
                 </div>
+                <button id="menu-toggle" type="button" aria-label="Toggle menu" aria-expanded="false"
+                    class="flex h-11 w-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-lg text-white/80 transition hover:bg-white/20 lg:hidden">
+                    <i id="menu-icon" class="fas fa-bars"></i>
+                </button>
             </div>
         </header>
 
+        <div id="mobile-menu" class="mt-3 hidden flex-col gap-2 lg:hidden">
+            <a href="{{ route('lots.overview') }}"
+                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
+                <i class="fas fa-chart-line"></i> Lot Report
+            </a>
+            <a href="{{ route('slots.dashboard') }}"
+                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
+                <i class="fas fa-map-location-dot"></i> Slot Monitor
+            </a>
+            <a href="{{ route('admin.lots') }}"
+                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
+                <i class="fas fa-building"></i> Parking Lots
+            </a>
+            <a href="{{ route('admin.kiosks') }}"
+                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
+                <i class="fas fa-id-card"></i> Kiosks
+            </a>
+            <a href="{{ route('admin.floors') }}"
+                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
+                <i class="fas fa-gear"></i> Configure
+            </a>
+        </div>
+        <div class="mt-3 flex items-center justify-between gap-4 lg:hidden">
+            <div id="kiosk-clock-mobile" class="text-lg font-bold tabular-nums drop-shadow"></div>
+            <div id="kiosk-date-mobile" class="text-xs text-white/60"></div>
+        </div>
+        @if (!$kioskLotNumber)
+            <p class="mt-2 text-center text-sm font-bold text-amber-300">
+                <i class="fas fa-triangle-exclamation mr-1"></i>
+                This kiosk is not linked to a parking lot. Register it in the admin panel and open it with
+                <span class="font-mono text-amber-200">/?kiosk=&lt;key&gt;</span>
+            </p>
+        @endif
+
+        @if ($kioskName || $kioskLotName)
+            <div class="flex justify-center mt-6">
+                <div
+                    class="flex items-center gap-4 rounded-2xl border border-white/15 bg-white/10 px-8 py-4 shadow-2xl backdrop-blur-xl">
+                    <span
+                        class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-emerald-600 text-xl text-white shadow-lg shadow-teal-500/30">
+                        <i class="fas fa-id-card"></i>
+                    </span>
+                    <div class="text-center sm:text-left">
+                        <div class="text-xl font-black uppercase tracking-[0.2em] text-teal-200">{{ $kioskName }}
+                        </div>
+                        <div class="mt-0.5 text-xs font-bold uppercase tracking-[0.3em] text-white/60">
+                            {{ $kioskLotName }} · <span class="text-teal-300">PARKING LOT #{{ $kioskLotNumber }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
         <p id="kiosk-hint" class="mt-6 text-center text-lg text-white/85">Tap a direction, then scan your card</p>
 
         <main class="grid flex-1 grid-cols-1 items-stretch gap-8 sm:grid-cols-2 my-8">
@@ -130,7 +190,8 @@
         </footer>
     </div>
 
-    <div id="result-overlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-md">
+    <div id="result-overlay"
+        class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-md">
         <div id="result-card"
             class="result-pop relative w-full max-w-xl rounded-[2.5rem] border border-white/20 bg-white/15 p-12 text-center shadow-2xl backdrop-blur-2xl">
             <button type="button" id="result-close"
@@ -209,7 +270,7 @@
             <div class="flex flex-col gap-4">
                 <div>
                     <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60"
-                        for="register-name">Owner
+                        for="register-name">Driver's
                         name</label>
                     <input id="register-name" name="name" type="text" required autocomplete="off"
                         class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
@@ -399,6 +460,11 @@
             let overlayTimer = null;
             let pendingRfid = null;
 
+            // Parking lot number this kiosk is registered against (?kiosk=<key> in the URL).
+            const kioskLot = @json($kioskLotNumber);
+            // Kiosk key from the URL; used to scope broadcasts and armed-mode to this kiosk.
+            const kioskKey = @json($kioskKey);
+
             function chipShow(label, bgClass) {
                 chipEl.classList.remove('hidden');
                 chipEl.className = 'rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-white ' +
@@ -434,7 +500,8 @@
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
-                        mode: armed
+                        mode: armed,
+                        kiosk: kioskKey,
                     }),
                 }).catch(() => {
                     /* ignore */
@@ -570,6 +637,10 @@
 
             async function submitScan(code, dir) {
                 if (busy || !code) return;
+                if (!kioskLot) {
+                    hint('This kiosk is not linked to a parking lot');
+                    return;
+                }
                 busy = true;
                 manual.disabled = true;
 
@@ -582,7 +653,9 @@
                         },
                         body: JSON.stringify({
                             rfid_id: code,
-                            type: dir
+                            type: dir,
+                            lot: kioskLot,
+                            kiosk: kioskKey,
                         }),
                     });
 
@@ -621,6 +694,18 @@
             entryBtn.addEventListener('click', () => setArmed('entry'));
             exitBtn.addEventListener('click', () => setArmed('exit'));
 
+            const menuToggle = document.getElementById('menu-toggle');
+            const mobileMenu = document.getElementById('mobile-menu');
+            const menuIcon = document.getElementById('menu-icon');
+
+            menuToggle.addEventListener('click', () => {
+                const isHidden = mobileMenu.classList.toggle('hidden');
+                mobileMenu.classList.toggle('flex', !isHidden);
+                menuToggle.setAttribute('aria-expanded', String(!isHidden));
+                menuIcon.classList.toggle('fa-bars', isHidden);
+                menuIcon.classList.toggle('fa-xmark', !isHidden);
+            });
+
             // Clicking the background (anything that isn't a control) un-arms
             // the selected direction so an accidental tap doesn't arm the kiosk.
             document.addEventListener('click', (e) => {
@@ -654,7 +739,7 @@
                     .toUpperCase();
 
                 if (!name) {
-                    registerError.textContent = 'Owner name is required';
+                    registerError.textContent = 'Driver\'s name is required';
                     registerError.classList.remove('hidden');
                     return;
                 }
@@ -685,6 +770,8 @@
                             name: name,
                             phone: phone,
                             vehicle_number: vehicleNumber,
+                            lot: kioskLot,
+                            kiosk: kioskKey,
                         }),
                     });
 
@@ -738,6 +825,8 @@
                                 .trim().toUpperCase(),
                             mobile_number: document.getElementById('mobile-number').value
                                 .trim(),
+                            lot: kioskLot,
+                            kiosk: kioskKey,
                         }),
                     });
 
@@ -807,29 +896,35 @@
                 }
             });
 
+            const clockMobileEl = document.getElementById('kiosk-clock-mobile');
+            const dateMobileEl = document.getElementById('kiosk-date-mobile');
+
             function tick() {
                 const now = new Date();
-                clockEl.textContent = now.toLocaleTimeString([], {
+                const time = now.toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit',
                     second: '2-digit'
                 });
-                dateEl.textContent = now.toLocaleDateString([], {
+                const date = now.toLocaleDateString([], {
                     weekday: 'long',
                     day: 'numeric',
                     month: 'long'
                 });
+                clockEl.textContent = time;
+                dateEl.textContent = date;
+                if (clockMobileEl) clockMobileEl.textContent = time;
+                if (dateMobileEl) dateMobileEl.textContent = date;
             }
             setInterval(tick, 1000);
             tick();
 
-            // TEMPORARY: live-update the kiosk from the 'rfid' broadcast channel so
-            // any scan (e.g. the hardware reader) shows up on this page immediately.
-            // Fired alongside the API response, so this may briefly re-show the same
-            // result when a scan is made from this page.
+// Live-update the kiosk from its own broadcast channel so any scan
+            // (e.g. the hardware reader) shows up on this page immediately. Events are
+            // scoped to this kiosk's key, so entry/exit kiosks never see each other's scans.
             (function attachEchoListener() {
-                if (window.Echo) {
-                    window.Echo.channel('rfid').listen('RfidScanned', (e) => {
+                if (window.Echo && kioskKey) {
+                    window.Echo.channel('kiosk.' + kioskKey).listen('RfidScanned', (e) => {
                         if (e.status === 'unregistered') {
                             openRegisterForm(e.rfid_id);
                             return;

@@ -30,7 +30,11 @@ class RfidScanned implements ShouldBroadcastNow
 
     public $driver_name;
 
-    public function __construct($rfid_id, $status, $message = null, $entry_id = null, $amount = null, $vehicle_number = null, $driver_name = null)
+    public $kiosk;
+
+    public $lot;
+
+    public function __construct($rfid_id, $status, $message = null, $entry_id = null, $amount = null, $vehicle_number = null, $driver_name = null, $kiosk = null, $lot = null)
     {
         $this->rfid_id = $rfid_id;
         $this->status = $status;
@@ -39,10 +43,23 @@ class RfidScanned implements ShouldBroadcastNow
         $this->amount = $amount;
         $this->vehicle_number = $vehicle_number;
         $this->driver_name = $driver_name;
+        $this->kiosk = $kiosk;
+        $this->lot = $lot;
     }
 
     public function broadcastOn()
     {
+        // Per-kiosk channel so only the browser(s) opened on that kiosk (?kiosk=<key>)
+        // receive its scans. Falls back to the per-lot channel when the reader hasn't
+        // learned its kiosk key yet, and finally to the global 'rfid' channel.
+        if ($this->kiosk) {
+            return new Channel('kiosk.'.$this->kiosk);
+        }
+
+        if ($this->lot) {
+            return new Channel('kiosk.'.$this->lot);
+        }
+
         return new Channel('rfid');
     }
 
@@ -57,6 +74,8 @@ class RfidScanned implements ShouldBroadcastNow
             'amount' => $this->amount,
             'vehicle_number' => $this->vehicle_number,
             'driver_name' => $this->driver_name,
+            'kiosk' => $this->kiosk,
+            'lot' => $this->lot,
         ];
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Admin\FloorManager;
+use App\Livewire\Admin\KioskManager;
 use App\Livewire\Admin\LotManager;
 use App\Livewire\LotOverview;
 use App\Livewire\Home;
@@ -16,3 +17,4 @@ Route::get('/slots', SlotDashboard::class)->name('slots.dashboard');
 // Admin: configure the floors and slot counts of the parking lot.
 Route::get('/admin/floors', FloorManager::class)->name('admin.floors');
 Route::get('/admin/lots', LotManager::class)->name('admin.lots');
+Route::get('/admin/kiosks', KioskManager::class)->name('admin.kiosks');
