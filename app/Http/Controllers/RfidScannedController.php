@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\RfidScanned;
 use App\Models\Entry;
+use App\Models\Kiosk;
 use App\Models\ParkingLot;
 use App\Models\Vehicle;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +38,11 @@ class RfidScannedController extends Controller
         $lot = $this->lotFromNumber($data['lot']);
         if ($lot instanceof JsonResponse) {
             return $lot;
+        }
+
+        $notLinked = $this->rejectIfKioskNotLinked($rfid, $data, $lot);
+        if ($notLinked) {
+            return $notLinked;
         }
 
         // Without a direction we can't tell an entry from an exit, so refuse the scan instead of guessing.
@@ -143,6 +149,11 @@ class RfidScannedController extends Controller
             return $lot;
         }
 
+        $notLinked = $this->rejectIfKioskNotLinked($data['rfid_id'], $data, $lot);
+        if ($notLinked) {
+            return $notLinked;
+        }
+
         $vehicle = Vehicle::create([
             'rfid_id' => $data['rfid_id'],
             'name' => $data['name'],
@@ -188,6 +199,11 @@ class RfidScannedController extends Controller
         $lot = $this->lotFromNumber($data['lot']);
         if ($lot instanceof JsonResponse) {
             return $lot;
+        }
+
+        $notLinked = $this->rejectIfKioskNotLinked($data['rfid_id'], $data, $lot);
+        if ($notLinked) {
+            return $notLinked;
         }
 
         $vehicle = Vehicle::where('rfid_id', $data['rfid_id'])->firstOrFail();
@@ -242,6 +258,39 @@ class RfidScannedController extends Controller
         }
 
         return $lot;
+    }
+
+    /**
+     * A scan may only be attributed to a kiosk that is currently linked to the
+     * reported parking lot. A delinked kiosk is refused silently (so nothing
+     * surfaces on its screen), while a mismatched key/lot pair broadcasts an
+     * error to that kiosk so the operator sees why the scan failed.
+     */
+    protected function rejectIfKioskNotLinked(string $rfid, array $data, ParkingLot $lot): ?JsonResponse
+    {
+        if (empty($data['kiosk'])) {
+            return null;
+        }
+
+        $kiosk = Kiosk::where('key', (string) $data['kiosk'])->first();
+
+        if ($kiosk && ! $kiosk->parking_lot_id) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Kiosk is not linked to a parking lot',
+            ], 422);
+        }
+
+        if (! $kiosk || $kiosk->parking_lot_id !== $lot->id) {
+            broadcast(new RfidScanned($rfid, 'error', 'Kiosk is not linked to this parking lot', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Kiosk is not linked to this parking lot',
+            ], 422);
+        }
+
+        return null;
     }
 
     protected function closeEntry(Vehicle $vehicle, Entry $activeEntry, string $rfid, ?ParkingLot $lot = null, ?string $kioskKey = null)

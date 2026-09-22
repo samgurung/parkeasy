@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('key')->unique();
-            $table->foreignId('parking_lot_id')->constrained();
+            $table->foreignId('parking_lot_id')->nullable()->constrained();
             $table->timestamps();
         });
     }

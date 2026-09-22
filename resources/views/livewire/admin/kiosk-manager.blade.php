@@ -89,6 +89,7 @@
                                 <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Parking Lot</label>
                                 <select wire:model="editLotId"
                                         class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-white outline-none focus:border-sky-400 focus:bg-white/15">
+                                    <option value="">No lot</option>
                                     @foreach ($lots as $lot)
                                         <option value="{{ $lot->id }}" class="text-white bg-slate-800">Lot #{{ $lot->lot_number }} — {{ $lot->name }}</option>
                                     @endforeach
@@ -117,9 +118,14 @@
                                 <div>
                                     <div class="text-lg font-bold">{{ $kiosk->name }}</div>
                                     <div class="text-xs text-white/50">
-                                        <span class="font-mono text-sky-300">KEY: {{ $kiosk->key }}</span> &bull;
-                                        <span class="text-teal-300">PARKING LOT #{{ $kiosk->parkingLot->lot_number }}</span>
-                                        &bull; {{ $kiosk->parkingLot->name }}
+                                        <span class="font-mono text-sky-300">KEY: {{ $kiosk->key }}</span>
+                                        @if ($kiosk->parkingLot)
+                                            &bull;
+                                            <span class="text-teal-300">PARKING LOT #{{ $kiosk->parkingLot->lot_number }}</span>
+                                            &bull; {{ $kiosk->parkingLot->name }}
+                                        @else
+                                            &bull; <span class="text-amber-300">NOT LINKED TO A LOT</span>
+                                        @endif
                                     </div>
                                 </div>
                             </div>
@@ -132,6 +138,12 @@
                                         class="rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-sky-300 hover:bg-sky-500/20 transition">
                                     <i class="fas fa-pen mr-1"></i> Edit
                                 </button>
+                                @if ($kiosk->parking_lot_id)
+                                    <button wire:click="delink({{ $kiosk->id }})"
+                                            class="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-amber-300 hover:bg-amber-500/20 transition">
+                                        <i class="fas fa-link-slash mr-1"></i> Delink
+                                    </button>
+                                @endif
                                 <button wire:click="confirmDelete({{ $kiosk->id }})"
                                         class="rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-rose-300 hover:bg-rose-500/20 transition">
                                     <i class="fas fa-trash mr-1"></i> Delete

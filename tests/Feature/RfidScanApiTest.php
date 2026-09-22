@@ -231,4 +231,42 @@ class RfidScanApiTest extends TestCase
             ->assertOk()
             ->assertSee('This kiosk is not linked to a parking lot');
     }
+
+    public function test_delinked_kiosk_scan_is_refused(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        Kiosk::create([
+            'name' => 'Main Gate',
+            'key' => 'main-gate',
+            'parking_lot_id' => $lot->id,
+        ]);
+        Kiosk::where('key', 'main-gate')->update(['parking_lot_id' => null]);
+
+        $this->postJson('/api/rfid-scan', [
+            'rfid_id' => 'CARD-A',
+            'type' => 'entry',
+            'lot' => self::LOT_A,
+            'kiosk' => 'main-gate',
+        ])->assertUnprocessable()
+            ->assertJson(['error' => 'Kiosk is not linked to a parking lot']);
+    }
+
+    public function test_kiosk_key_for_a_different_lot_is_refused(): void
+    {
+        $this->makeLot(self::LOT_A);
+        $lotB = $this->makeLot(self::LOT_B);
+        Kiosk::create([
+            'name' => 'Entry Gate',
+            'key' => 'entry-gate',
+            'parking_lot_id' => $lotB->id,
+        ]);
+
+        $this->postJson('/api/rfid-scan', [
+            'rfid_id' => 'CARD-A',
+            'type' => 'entry',
+            'lot' => self::LOT_A,
+            'kiosk' => 'entry-gate',
+        ])->assertUnprocessable()
+            ->assertJson(['error' => 'Kiosk is not linked to this parking lot']);
+    }
 }

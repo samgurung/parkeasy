@@ -58,15 +58,20 @@ class KioskManager extends Component
     {
         $validated = $this->validate([
             'editName' => ['required', 'string', 'max:255'],
-            'editLotId' => ['required', 'exists:parking_lots,id'],
+            'editLotId' => ['nullable', 'exists:parking_lots,id'],
         ]);
 
         Kiosk::whereKey($this->editingId)->update([
             'name' => trim($validated['editName']),
-            'parking_lot_id' => $validated['editLotId'],
+            'parking_lot_id' => $this->editLotId ?: null,
         ]);
 
         $this->cancel();
+    }
+
+    public function delink(int $id): void
+    {
+        Kiosk::whereKey($id)->update(['parking_lot_id' => null]);
     }
 
     public function cancel(): void

@@ -94,7 +94,7 @@
             </p>
         @endif
 
-        @if ($kioskName || $kioskLotName)
+        @if ($kioskLotNumber)
             <div class="flex justify-center mt-6">
                 <div
                     class="flex items-center gap-4 rounded-2xl border border-white/15 bg-white/10 px-8 py-4 shadow-2xl backdrop-blur-xl">

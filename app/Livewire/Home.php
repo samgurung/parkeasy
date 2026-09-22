@@ -28,7 +28,7 @@ class Home extends Component
             ->first();
 
         return view('livewire.home', [
-            'recentScans' => $this->recentScans(),
+            'recentScans' => $this->recentScans($kiosk?->parking_lot_id),
             'kioskKey' => $kiosk?->key,
             'kioskName' => $kiosk?->name,
             'kioskLotNumber' => $kiosk?->parkingLot?->lot_number,
@@ -42,9 +42,15 @@ class Home extends Component
      *
      * @return Collection<int, array{status: string, rfid_id: ?string, vehicle_number: ?string, driver_name: ?string, amount: ?float, time: Carbon, entry_id: int}>
      */
-    protected function recentScans()
+    protected function recentScans(?int $parkingLotId)
     {
+        // An unlinked kiosk has no lot, so it has no recent scans to show.
+        if ($parkingLotId === null) {
+            return collect();
+        }
+
         return Entry::with('vehicle')
+            ->where('parking_lot_id', $parkingLotId)
             ->latest('updated_at')
             ->limit(20)
             ->get()
