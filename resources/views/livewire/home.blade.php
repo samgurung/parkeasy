@@ -237,6 +237,25 @@
                         class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg uppercase tracking-widest text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
                 </div>
                 <div>
+                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Vehicle type</label>
+                    <div class="mt-2 grid grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="vehicle_type" value="two_wheeler" class="peer sr-only">
+                            <div class="rounded-xl border border-white/20 bg-white/10 p-3 text-center transition peer-checked:border-sky-400 peer-checked:bg-sky-500/20">
+                                <i class="fas fa-motorcycle text-2xl text-sky-300"></i>
+                                <span class="mt-1 block text-sm font-bold uppercase tracking-widest text-white/70 peer-checked:text-white">Two-Wheeler</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="vehicle_type" value="four_wheeler" checked class="peer sr-only">
+                            <div class="rounded-xl border border-white/20 bg-white/10 p-3 text-center transition peer-checked:border-teal-400 peer-checked:bg-teal-500/20">
+                                <i class="fas fa-car-side text-2xl text-teal-300"></i>
+                                <span class="mt-1 block text-sm font-bold uppercase tracking-widest text-white/70 peer-checked:text-white">Four-Wheeler</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <div>
                     <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60"
                         for="mobile-number">Mobile number</label>
                     <input id="mobile-number" name="mobile_number" type="tel" required autocomplete="off"
@@ -288,6 +307,25 @@
                     <input id="register-vehicle-number" name="vehicle_number" type="text" required
                         autocomplete="off"
                         class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg uppercase tracking-widest text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Vehicle type</label>
+                    <div class="mt-2 grid grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="vehicle_type" value="two_wheeler" class="peer sr-only">
+                            <div class="rounded-xl border border-white/20 bg-white/10 p-3 text-center transition peer-checked:border-sky-400 peer-checked:bg-sky-500/20">
+                                <i class="fas fa-motorcycle text-2xl text-sky-300"></i>
+                                <span class="mt-1 block text-sm font-bold uppercase tracking-widest text-white/70 peer-checked:text-white">Two-Wheeler</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="vehicle_type" value="four_wheeler" checked class="peer sr-only">
+                            <div class="rounded-xl border border-white/20 bg-white/10 p-3 text-center transition peer-checked:border-teal-400 peer-checked:bg-teal-500/20">
+                                <i class="fas fa-car-side text-2xl text-teal-300"></i>
+                                <span class="mt-1 block text-sm font-bold uppercase tracking-widest text-white/70 peer-checked:text-white">Four-Wheeler</span>
+                            </div>
+                        </label>
+                    </div>
                 </div>
                 <div id="register-error" class="hidden text-sm font-semibold text-rose-300"></div>
                 <button type="submit"
@@ -559,12 +597,15 @@
                 overlay.classList.remove('flex');
             }
 
-            function openDetailsForm(code) {
+            function openDetailsForm(code, vehicleType) {
                 if (pendingRfid === code) return;
                 pendingRfid = code;
                 detailsForm.reset();
                 detailsError.classList.add('hidden');
                 detailsCode.textContent = code || '';
+                if (vehicleType === 'two_wheeler' || vehicleType === 'four_wheeler') {
+                    detailsForm.querySelector('input[name="vehicle_type"][value="' + vehicleType + '"]').checked = true;
+                }
                 detailsOverlay.classList.remove('hidden');
                 detailsOverlay.classList.add('flex');
                 document.getElementById('driver-name').focus();
@@ -668,7 +709,7 @@
 
                     if (data.success) {
                         if (data.status === 'details_required') {
-                            openDetailsForm(data.rfid_id);
+                            openDetailsForm(data.rfid_id, data.vehicle_type);
                         } else {
                             showResult(data.status, data.rfid_id, data.time, null, data.amount, data
                                 .vehicle_number, data.driver_name);
@@ -737,6 +778,8 @@
                 const phone = document.getElementById('register-phone').value.trim();
                 const vehicleNumber = document.getElementById('register-vehicle-number').value.trim()
                     .toUpperCase();
+                const vehicleType = document.querySelector('#register-form input[name="vehicle_type"]:checked')
+                    .value;
 
                 if (!name) {
                     registerError.textContent = 'Driver\'s name is required';
@@ -770,6 +813,7 @@
                             name: name,
                             phone: phone,
                             vehicle_number: vehicleNumber,
+                            vehicle_type: vehicleType,
                             lot: kioskLot,
                             kiosk: kioskKey,
                         }),
@@ -825,6 +869,8 @@
                                 .trim().toUpperCase(),
                             mobile_number: document.getElementById('mobile-number').value
                                 .trim(),
+                            vehicle_type: document.querySelector('#details-form input[name="vehicle_type"]:checked')
+                                .value,
                             lot: kioskLot,
                             kiosk: kioskKey,
                         }),

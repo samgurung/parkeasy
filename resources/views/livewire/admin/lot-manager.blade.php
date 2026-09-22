@@ -35,7 +35,7 @@
             <h2 class="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-white/50 flex items-center gap-2">
                 <i class="fas fa-plus-circle text-sky-400"></i> Add New Parking Lot
             </h2>
-            <form wire:submit="add" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <form wire:submit="add" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                     <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="name">Parking Lot Name</label>
                     <input id="name" wire:model="name" type="text" placeholder="e.g. Main Garage"
@@ -48,15 +48,27 @@
                            class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
                     @error('address') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
                 </div>
-                <div class="flex items-end">
+                <div>
+                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="rateTwoWheeler">2-Wheeler Rate (₹/hr)</label>
+                    <input id="rateTwoWheeler" wire:model="rateTwoWheeler" type="number" min="0" step="0.01" placeholder="10"
+                           class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
+                    @error('rateTwoWheeler') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="rateFourWheeler">4-Wheeler Rate (₹/hr)</label>
+                    <input id="rateFourWheeler" wire:model="rateFourWheeler" type="number" min="0" step="0.01" placeholder="20"
+                           class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
+                    @error('rateFourWheeler') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                </div>
+                <div class="flex items-end sm:col-span-2 lg:col-span-4">
                     <button type="submit"
                             class="w-full rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 px-6 py-3 text-sm font-black uppercase tracking-[0.2em] text-white shadow-lg hover:brightness-110 transition">
                         <i class="fas fa-plus mr-2"></i> Add Parking Lot
                     </button>
                 </div>
-                <p class="text-xs text-white/40 sm:col-span-2">
+                <p class="text-xs text-white/40 sm:col-span-2 lg:col-span-4">
                     <i class="fas fa-circle-info mr-1 text-sky-400"></i>
-                    The parking lot number is assigned automatically (1, 2, 3, …) and used by the ESP32 to address this parking lot.
+                    The parking lot number is assigned automatically (1, 2, 3, …) and used by the ESP32 to address this parking lot. Exit fees are billed at the rate for the vehicle type chosen on entry.
                 </p>
             </form>
         </section>
@@ -85,6 +97,18 @@
                                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-white outline-none focus:border-sky-400 focus:bg-white/15" />
                                 @error('editAddress') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
                             </div>
+                            <div>
+                                <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">2-Wheeler Rate (₹/hr)</label>
+                                <input wire:model="editRateTwoWheeler" type="number" min="0" step="0.01"
+                                       class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-white outline-none focus:border-sky-400 focus:bg-white/15" />
+                                @error('editRateTwoWheeler') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">4-Wheeler Rate (₹/hr)</label>
+                                <input wire:model="editRateFourWheeler" type="number" min="0" step="0.01"
+                                       class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-white outline-none focus:border-sky-400 focus:bg-white/15" />
+                                @error('editRateFourWheeler') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                            </div>
                             <div class="sm:col-span-2 flex gap-3">
                                 <button type="submit"
                                         class="rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-white shadow hover:brightness-110 transition">
@@ -112,6 +136,10 @@
                                         @if ($lot->address)
                                             &bull; {{ $lot->address }}
                                         @endif
+                                    </div>
+                                    <div class="mt-1 text-xs text-white/50">
+                                        <i class="fas fa-motorcycle mr-1 text-sky-300"></i>₹{{ number_format($lot->rate_two_wheeler, 2) }}/hr
+                                        &bull; <i class="fas fa-car mr-1 text-teal-300"></i>₹{{ number_format($lot->rate_four_wheeler, 2) }}/hr
                                     </div>
                                 </div>
                             </div>

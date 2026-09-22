@@ -17,6 +17,12 @@ class LotManager extends Component
     #[Validate(['nullable', 'string', 'max:255'])]
     public string $address = '';
 
+    #[Validate(['required', 'numeric', 'min:0'])]
+    public string $rateTwoWheeler = '10';
+
+    #[Validate(['required', 'numeric', 'min:0'])]
+    public string $rateFourWheeler = '20';
+
     public ?int $editingId = null;
 
     public ?int $deletingId = null;
@@ -25,14 +31,20 @@ class LotManager extends Component
 
     public string $editAddress = '';
 
+    public string $editRateTwoWheeler = '';
+
+    public string $editRateFourWheeler = '';
+
     public function add(): void
     {
         $this->validate();
 
         ParkingLot::create([
-            'name'       => $this->name,
-            'lot_number' => ParkingLot::nextLotNumber(),
-            'address'    => $this->address ?: null,
+            'name'              => $this->name,
+            'lot_number'        => ParkingLot::nextLotNumber(),
+            'address'           => $this->address ?: null,
+            'rate_two_wheeler'  => $this->rateTwoWheeler,
+            'rate_four_wheeler' => $this->rateFourWheeler,
         ]);
 
         $this->reset('name', 'address');
@@ -42,21 +54,27 @@ class LotManager extends Component
     {
         $lot = ParkingLot::findOrFail($id);
 
-        $this->editingId   = $lot->id;
-        $this->editName    = $lot->name;
-        $this->editAddress = (string) $lot->address;
+        $this->editingId          = $lot->id;
+        $this->editName           = $lot->name;
+        $this->editAddress        = (string) $lot->address;
+        $this->editRateTwoWheeler = (string) $lot->rate_two_wheeler;
+        $this->editRateFourWheeler = (string) $lot->rate_four_wheeler;
     }
 
     public function save(): void
     {
         $this->validate([
-            'editName'    => ['required', 'string', 'max:255'],
-            'editAddress' => ['nullable', 'string', 'max:255'],
+            'editName'             => ['required', 'string', 'max:255'],
+            'editAddress'          => ['nullable', 'string', 'max:255'],
+            'editRateTwoWheeler'   => ['required', 'numeric', 'min:0'],
+            'editRateFourWheeler'  => ['required', 'numeric', 'min:0'],
         ]);
 
         ParkingLot::whereKey($this->editingId)->update([
-            'name'    => $this->editName,
-            'address' => $this->editAddress ?: null,
+            'name'              => $this->editName,
+            'address'           => $this->editAddress ?: null,
+            'rate_two_wheeler'  => $this->editRateTwoWheeler,
+            'rate_four_wheeler' => $this->editRateFourWheeler,
         ]);
 
         $this->cancel();
@@ -67,6 +85,8 @@ class LotManager extends Component
         $this->editingId = null;
         $this->editName = '';
         $this->editAddress = '';
+        $this->editRateTwoWheeler = '';
+        $this->editRateFourWheeler = '';
     }
 
     public function confirmDelete(int $id): void

@@ -9,6 +9,7 @@ class Entry extends Model
 {
     protected $fillable = [
         'vehicle_id',
+        'vehicle_type',
         'parking_lot_id',
         'driver_name',
         'vehicle_number',

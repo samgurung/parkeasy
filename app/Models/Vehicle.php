@@ -14,6 +14,7 @@ class Vehicle extends Model
         'name',
         'phone',
         'rfid_id',
+        'vehicle_type',
     ];
 
     public function entries(): HasMany

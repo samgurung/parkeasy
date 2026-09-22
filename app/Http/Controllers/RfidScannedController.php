@@ -13,9 +13,6 @@ use Illuminate\Support\Facades\Cache;
 
 class RfidScannedController extends Controller
 {
-    // Flat hourly parking rate used to calculate the fee on exit.
-    protected const RATE_PER_HOUR = 20;
-
     // Direction armed on the kiosk, used when the RFID reader posts a scan without a 'type'.
     protected const ARMED_MODE_CACHE_KEY = 'kiosk:armed_mode';
 
@@ -129,6 +126,7 @@ class RfidScannedController extends Controller
             'rfid_id' => $rfid,
             'lot' => $lot->lot_number,
             'lot_name' => $lot->name,
+            'vehicle_type' => $vehicle->vehicle_type,
             'time' => now()->toDateTimeString(),
         ]);
     }
@@ -140,6 +138,7 @@ class RfidScannedController extends Controller
             'name' => 'required|string|max:255',
             'phone' => 'required|digits:10',
             'vehicle_number' => 'required|string|max:255',
+            'vehicle_type' => 'required|in:two_wheeler,four_wheeler',
             'lot' => 'required|integer|min:1',
             'kiosk' => 'sometimes|string',
         ]);
@@ -158,6 +157,7 @@ class RfidScannedController extends Controller
             'rfid_id' => $data['rfid_id'],
             'name' => $data['name'],
             'phone' => $data['phone'],
+            'vehicle_type' => $data['vehicle_type'],
         ]);
 
         // Registration already captures driver, mobile and vehicle number, so park directly.
@@ -166,6 +166,7 @@ class RfidScannedController extends Controller
             'driver_name' => $data['name'],
             'mobile_number' => $data['phone'],
             'vehicle_number' => strtoupper($data['vehicle_number']),
+            'vehicle_type' => $data['vehicle_type'],
             'status' => 'parked',
             'parking_lot_id' => $lot->id,
         ]);
@@ -192,6 +193,7 @@ class RfidScannedController extends Controller
             'driver_name' => 'required|string|max:255',
             'vehicle_number' => 'required|string|max:255',
             'mobile_number' => 'required|string|max:10',
+            'vehicle_type' => 'required|in:two_wheeler,four_wheeler',
             'lot' => 'required|integer|min:1',
             'kiosk' => 'sometimes|string',
         ]);
@@ -220,11 +222,15 @@ class RfidScannedController extends Controller
             ], 422);
         }
 
+        // Remember the vehicle type on the card so the next visit can skip asking.
+        $vehicle->update(['vehicle_type' => $data['vehicle_type']]);
+
         $entry = $vehicle->entries()->create([
             'entry_time' => now(),
             'driver_name' => $data['driver_name'],
             'vehicle_number' => $data['vehicle_number'],
             'mobile_number' => $data['mobile_number'],
+            'vehicle_type' => $data['vehicle_type'],
             'status' => 'parked',
             'parking_lot_id' => $lot->id,
         ]);
@@ -296,7 +302,7 @@ class RfidScannedController extends Controller
     protected function closeEntry(Vehicle $vehicle, Entry $activeEntry, string $rfid, ?ParkingLot $lot = null, ?string $kioskKey = null)
     {
         $exitTime = now();
-        $amount = $this->calculateFee($activeEntry->entry_time, $exitTime);
+        $amount = $this->calculateFee($activeEntry, $exitTime);
 
         $activeEntry->update([
             'status' => 'exited',
@@ -318,11 +324,17 @@ class RfidScannedController extends Controller
         ]);
     }
 
-    protected function calculateFee($entryTime, $exitTime): float
+    protected function calculateFee(Entry $entry, $exitTime): float
     {
-        $hours = max(1, (int) ceil($entryTime->diffInMinutes($exitTime) / 60));
+        $hours = max(1, (int) ceil($entry->entry_time->diffInMinutes($exitTime) / 60));
 
-        return $hours * self::RATE_PER_HOUR;
+        // Legacy entries may predate vehicle types; default to the four-wheeler rate.
+        $vehicleType = $entry->vehicle_type ?? ParkingLot::VEHICLE_FOUR_WHEELER;
+
+        $rate = $entry->parkingLot?->rateForVehicleType($vehicleType)
+            ?? ($vehicleType === ParkingLot::VEHICLE_TWO_WHEELER ? 10.0 : 20.0);
+
+        return $hours * $rate;
     }
 
     public function setMode(Request $request)

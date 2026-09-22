@@ -116,6 +116,28 @@
                         {{ $lot->occupied_slots_count }}/{{ $lot->total_slots }} used · {{ $lot->occupancy_pct }}% full
                     </p>
 
+                    {{-- Per-type occupancy (from parked entries, since IR sensors can't tell the type) --}}
+                    <div class="mt-3 grid grid-cols-2 gap-3">
+                        <div class="rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-center">
+                            <span class="text-xs font-black uppercase tracking-widest text-sky-300">
+                                <i class="fas fa-motorcycle mr-1"></i>2-Wheeler
+                            </span>
+                            <span class="mt-1 block text-2xl font-black text-white">{{ $lot->parked_two_wheeler_count }}</span>
+                            <span class="text-[10px] uppercase tracking-widest text-white/40">
+                                {{ $lot->occupied_slots_count > 0 ? round(($lot->parked_two_wheeler_count / $lot->occupied_slots_count) * 100) : 0 }}% of occupied
+                            </span>
+                        </div>
+                        <div class="rounded-xl border border-teal-400/30 bg-teal-500/10 px-4 py-2.5 text-center">
+                            <span class="text-xs font-black uppercase tracking-widest text-teal-300">
+                                <i class="fas fa-car mr-1"></i>4-Wheeler
+                            </span>
+                            <span class="mt-1 block text-2xl font-black text-white">{{ $lot->parked_four_wheeler_count }}</span>
+                            <span class="text-[10px] uppercase tracking-widest text-white/40">
+                                {{ $lot->occupied_slots_count > 0 ? round(($lot->parked_four_wheeler_count / $lot->occupied_slots_count) * 100) : 0 }}% of occupied
+                            </span>
+                        </div>
+                    </div>
+
                     {{-- Stats --}}
                     <dl class="mt-5 grid grid-cols-3 gap-3 text-center">
                         <div class="rounded-xl bg-black/30 p-3">

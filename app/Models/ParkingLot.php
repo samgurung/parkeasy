@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Entry;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,14 +12,22 @@ class ParkingLot extends Model
 {
     use HasFactory;
 
+    public const VEHICLE_TWO_WHEELER = 'two_wheeler';
+
+    public const VEHICLE_FOUR_WHEELER = 'four_wheeler';
+
     protected $fillable = [
         'name',
         'lot_number',
         'address',
+        'rate_two_wheeler',
+        'rate_four_wheeler',
     ];
 
     protected $casts = [
         'lot_number' => 'integer',
+        'rate_two_wheeler' => 'float',
+        'rate_four_wheeler' => 'float',
     ];
 
     /** @return HasMany<ParkingFloor> */
@@ -38,6 +47,16 @@ class ParkingLot extends Model
             'id',               // local key on parking_lots
             'id',               // local key on parking_floors
         );
+    }
+
+    /**
+     * Entries currently parked at this lot (used for per-type occupancy telemetry).
+     *
+     * @return HasMany<Entry>
+     */
+    public function parkedEntries(): HasMany
+    {
+        return $this->hasMany(Entry::class)->where('status', 'parked');
     }
 
     /**
@@ -70,5 +89,14 @@ class ParkingLot extends Model
         return $this->total_slots > 0
             ? (int) round(($this->occupied_slots / $this->total_slots) * 100)
             : 0;
+    }
+
+    // ── Rates ─────────────────────────────────────────────────────────────────
+
+    public function rateForVehicleType(?string $vehicleType): float
+    {
+        return $vehicleType === self::VEHICLE_TWO_WHEELER
+            ? (float) $this->rate_two_wheeler
+            : (float) $this->rate_four_wheeler;
     }
 }

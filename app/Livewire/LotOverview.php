@@ -27,6 +27,8 @@ class LotOverview extends Component
                 'floors',
                 'slots',
                 'slots as occupied_slots_count' => fn ($q) => $q->where('is_occupied', true),
+                'parkedEntries as parked_two_wheeler_count' => fn ($q) => $q->where('vehicle_type', 'two_wheeler'),
+                'parkedEntries as parked_four_wheeler_count' => fn ($q) => $q->where('vehicle_type', 'four_wheeler'),
             ])
             // Only show lots that are actually configured with floors/slots.
             ->whereHas('slots')

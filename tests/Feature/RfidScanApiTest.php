@@ -109,6 +109,7 @@ class RfidScanApiTest extends TestCase
             'name' => 'John',
             'phone' => '9876543210',
             'vehicle_number' => 'ka01ab1234',
+            'vehicle_type' => 'four_wheeler',
             'lot' => self::LOT_A,
         ])->assertOk()
             ->assertJson(['status' => 'parked', 'lot' => self::LOT_A, 'lot_name' => $lot->name]);
@@ -131,6 +132,7 @@ class RfidScanApiTest extends TestCase
             'driver_name' => 'John',
             'vehicle_number' => 'KA01AB1234',
             'mobile_number' => '9876543210',
+            'vehicle_type' => 'four_wheeler',
             'lot' => self::LOT_A,
         ])->assertOk()->assertJson(['status' => 'parked']);
 
@@ -149,6 +151,7 @@ class RfidScanApiTest extends TestCase
             'name' => 'John',
             'phone' => '9876543210',
             'vehicle_number' => 'KA01AB1234',
+            'vehicle_type' => 'four_wheeler',
         ])->assertUnprocessable()->assertJsonValidationErrors('lot');
 
         $this->postJson('/api/rfid-scan/details', [
@@ -156,7 +159,117 @@ class RfidScanApiTest extends TestCase
             'driver_name' => 'John',
             'vehicle_number' => 'KA01AB1234',
             'mobile_number' => '9876543210',
+            'vehicle_type' => 'four_wheeler',
         ])->assertUnprocessable()->assertJsonValidationErrors('lot');
+    }
+
+    public function test_register_and_details_require_vehicle_type(): void
+    {
+        $this->makeLot(self::LOT_A);
+        $this->makeVehicle();
+
+        $this->postJson('/api/rfid-scan/register', [
+            'rfid_id' => 'CARD-B',
+            'name' => 'John',
+            'phone' => '9876543210',
+            'vehicle_number' => 'KA01AB1234',
+            'lot' => self::LOT_A,
+        ])->assertUnprocessable()->assertJsonValidationErrors('vehicle_type');
+
+        $this->postJson('/api/rfid-scan/details', [
+            'rfid_id' => 'CARD-A',
+            'driver_name' => 'John',
+            'vehicle_number' => 'KA01AB1234',
+            'mobile_number' => '9876543210',
+            'lot' => self::LOT_A,
+        ])->assertUnprocessable()->assertJsonValidationErrors('vehicle_type');
+    }
+
+    public function test_vehicle_type_is_stored_on_the_vehicle_and_entry(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+
+        $response = $this->postJson('/api/rfid-scan/register', [
+            'rfid_id' => 'CARD-A',
+            'name' => 'John',
+            'phone' => '9876543210',
+            'vehicle_number' => 'KA01AB1234',
+            'vehicle_type' => 'two_wheeler',
+            'lot' => self::LOT_A,
+        ])->assertOk();
+
+        $this->assertSame('two_wheeler', Vehicle::where('rfid_id', 'CARD-A')->value('vehicle_type'));
+        $this->assertSame('two_wheeler', Entry::findOrFail($response->json('entry_id'))->vehicle_type);
+    }
+
+    public function test_details_required_echoes_the_remembered_vehicle_type(): void
+    {
+        $this->makeLot(self::LOT_A);
+        $this->makeVehicle()->update(['vehicle_type' => 'two_wheeler']);
+
+        $this->scan('CARD-A', 'entry', self::LOT_A)
+            ->assertOk()
+            ->assertJson(['status' => 'details_required', 'vehicle_type' => 'two_wheeler']);
+    }
+
+    public function test_save_details_stores_and_remembers_the_vehicle_type(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeVehicle();
+
+        $this->scan('CARD-A', 'entry', self::LOT_A)->assertOk();
+
+        $response = $this->postJson('/api/rfid-scan/details', [
+            'rfid_id' => 'CARD-A',
+            'driver_name' => 'John',
+            'vehicle_number' => 'KA01AB1234',
+            'mobile_number' => '9876543210',
+            'vehicle_type' => 'two_wheeler',
+            'lot' => self::LOT_A,
+        ])->assertOk();
+
+        $this->assertSame('two_wheeler', Entry::findOrFail($response->json('entry_id'))->vehicle_type);
+        $this->assertSame('two_wheeler', Vehicle::where('rfid_id', 'CARD-A')->value('vehicle_type'));
+    }
+
+    public function test_fee_uses_the_lot_rate_for_each_vehicle_type(): void
+    {
+        $lot = ParkingLot::create([
+            'name' => 'Rate Test',
+            'lot_number' => self::LOT_A,
+            'rate_two_wheeler' => 15,
+            'rate_four_wheeler' => 35,
+        ]);
+
+        $bike = $this->makeVehicle('CARD-BIKE');
+        $bike->entries()->create([
+            'entry_time' => now(),
+            'driver_name' => 'Biker',
+            'vehicle_number' => 'KA01AA0001',
+            'mobile_number' => '1234567890',
+            'vehicle_type' => 'two_wheeler',
+            'status' => 'parked',
+            'parking_lot_id' => $lot->id,
+        ]);
+
+        $car = $this->makeVehicle('CARD-CAR');
+        $car->entries()->create([
+            'entry_time' => now(),
+            'driver_name' => 'Driver',
+            'vehicle_number' => 'KA01AA0002',
+            'mobile_number' => '1234567890',
+            'vehicle_type' => 'four_wheeler',
+            'status' => 'parked',
+            'parking_lot_id' => $lot->id,
+        ]);
+
+        $this->scan('CARD-BIKE', 'exit', self::LOT_A)
+            ->assertOk()
+            ->assertJson(['amount' => 15]);
+
+        $this->scan('CARD-CAR', 'exit', self::LOT_A)
+            ->assertOk()
+            ->assertJson(['amount' => 35]);
     }
 
     public function test_exit_at_the_same_lot_closes_the_entry(): void
