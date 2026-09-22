@@ -12,11 +12,18 @@
         {{-- Header --}}
         <header class="flex flex-col gap-5 mb-8">
             <div class="flex items-center justify-between gap-4">
-                <div>
-                    <h1 class="text-3xl font-black uppercase tracking-widest">
-                        <span class="text-teal-400">Live</span> Parking Lot Report
-                    </h1>
-                    <p class="mt-1 text-sm text-white/60">Real-time occupancy across all parking lots — pick the one with room near you.</p>
+                <div class="flex items-center gap-3">
+                    <a href="{{ route('home') }}"
+                       class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-lg text-white/70 transition hover:bg-white/20 hover:text-white"
+                       title="Go to home screen" aria-label="Go to home screen">
+                        <i class="fas fa-house"></i>
+                    </a>
+                    <div>
+                        <h1 class="text-3xl font-black uppercase tracking-widest">
+                            <span class="text-teal-400">Live</span> Parking Lot Report
+                        </h1>
+                        <p class="mt-1 text-sm text-white/60">Real-time occupancy across all parking lots — pick the one with room near you.</p>
+                    </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
                     <a href="{{ route('slots.dashboard') }}"

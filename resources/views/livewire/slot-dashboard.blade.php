@@ -10,11 +10,18 @@
 
         {{-- Page header --}}
         <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h1 class="text-3xl font-black uppercase tracking-widest">
-                    <span class="text-teal-400">Slot</span> Monitor
-                </h1>
-                <p class="mt-1 text-sm text-white/60">Live parking occupancy from IR slot sensors</p>
+            <div class="flex items-center gap-3">
+                <a href="{{ route('home') }}"
+                   class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-lg text-white/70 transition hover:bg-white/20 hover:text-white"
+                   title="Go to home screen" aria-label="Go to home screen">
+                    <i class="fas fa-house"></i>
+                </a>
+                <div>
+                    <h1 class="text-3xl font-black uppercase tracking-widest">
+                        <span class="text-teal-400">Slot</span> Monitor
+                    </h1>
+                    <p class="mt-1 text-sm text-white/60">Live parking occupancy from IR slot sensors</p>
+                </div>
             </div>
             <div class="flex flex-wrap items-center gap-3">
                 <span id="live-chip"

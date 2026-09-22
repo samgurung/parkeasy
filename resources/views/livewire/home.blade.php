@@ -621,6 +621,14 @@
             entryBtn.addEventListener('click', () => setArmed('entry'));
             exitBtn.addEventListener('click', () => setArmed('exit'));
 
+            // Clicking the background (anything that isn't a control) un-arms
+            // the selected direction so an accidental tap doesn't arm the kiosk.
+            document.addEventListener('click', (e) => {
+                if (armed && !e.target.closest('button, a, select, input, label, nav')) {
+                    setArmed(null);
+                }
+            });
+
             registerClose.addEventListener('click', () => closeRegisterForm());
             detailsClose.addEventListener('click', () => closeDetailsForm());
             resultClose.addEventListener('click', () => closeResult());

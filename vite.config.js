@@ -17,6 +17,15 @@ export default defineConfig({
         tailwindcss(),
     ],
     server: {
+        host: '0.0.0.0',
+        hmr: {
+            host: 'parkeasy.test',
+        },
+        cors: {
+            origin: /https:\/\/parkeasy\.test$/,
+            methods: ['GET', 'POST', 'OPTIONS'],
+            allowedHeaders: ['*'],
+        },
         watch: {
             ignored: ['**/storage/framework/views/**'],
         },

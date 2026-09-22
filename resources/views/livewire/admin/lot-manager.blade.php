@@ -11,11 +11,18 @@
 
         {{-- Page header --}}
         <header class="flex items-center justify-between gap-4 mb-8">
-            <div>
-                <h1 class="text-3xl font-black uppercase tracking-widest">
-                    <span class="text-sky-400">Admin</span> — Parking Lots
-                </h1>
-                <p class="mt-1 text-sm text-white/60">Configure parking lots</p>
+            <div class="flex items-center gap-3">
+                <a href="{{ route('home') }}"
+                   class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-lg text-white/70 transition hover:bg-white/20 hover:text-white"
+                   title="Go to home screen" aria-label="Go to home screen">
+                    <i class="fas fa-house"></i>
+                </a>
+                <div>
+                    <h1 class="text-3xl font-black uppercase tracking-widest">
+                        <span class="text-sky-400">Admin</span> — Parking Lots
+                    </h1>
+                    <p class="mt-1 text-sm text-white/60">Configure parking lots</p>
+                </div>
             </div>
             <a href="{{ route('slots.dashboard') }}"
                class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
