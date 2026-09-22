@@ -166,6 +166,11 @@
                             class="fas {{ $scan['status'] === 'parked' ? 'fa-arrow-right-to-bracket text-emerald-300' : 'fa-arrow-right-from-bracket text-rose-300' }}"></i>
                         <span
                             class="uppercase tracking-widest">{{ $scan['status'] === 'parked' ? 'Parked' : 'Exit' }}</span>
+                        @if ($scan['vehicle_type'] === 'two_wheeler')
+                            <i class="fas fa-motorcycle text-sm text-sky-300"></i>
+                        @elseif ($scan['vehicle_type'] === 'four_wheeler')
+                            <i class="fas fa-car text-sm text-teal-300"></i>
+                        @endif
                         <span class="font-mono tracking-widest text-white/80">{{ $scan['vehicle_number'] }}</span>
                         @if ($scan['driver_name'])
                             <span class="text-white/60">{{ $scan['driver_name'] }}</span>
@@ -637,7 +642,7 @@
             // Seeded with the entries already rendered server-side so a live broadcast for one of them isn't duplicated.
             const shownEntryIds = new Set(@json($recentScans->map(fn($scan) => $scan['entry_id'] . ':' . $scan['status'])->values()));
 
-            function pushRecent(status, code, amount, vehicleNumber, driverName, entryId) {
+            function pushRecent(status, code, amount, vehicleNumber, driverName, entryId, vehicleType) {
                 // The API response and the 'rfid' broadcast both fire for the same scan; skip the repeat.
                 // An entry has separate parked/exit events, so key the dedup on both.
                 if (entryId != null) {
@@ -652,6 +657,10 @@
                     recentList.innerHTML = '';
                 }
 
+                const typeIcon = vehicleType === 'two_wheeler' ?
+                    '<i class="fas fa-motorcycle text-sm text-sky-300"></i>' :
+                    (vehicleType === 'four_wheeler' ? '<i class="fas fa-car text-sm text-teal-300"></i>' : '');
+
                 const li = document.createElement('li');
                 li.className =
                     'flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold';
@@ -659,7 +668,8 @@
                     (status === 'parked' ? 'fa-arrow-right-to-bracket text-emerald-300' :
                         'fa-arrow-right-from-bracket text-rose-300') +
                     '"></i><span class="uppercase tracking-widest">' + (status === 'parked' ? 'Parked' : 'Exit') +
-                    '</span><span class="font-mono tracking-widest text-white/80">' + (vehicleNumber || code || '') +
+                    '</span>' + typeIcon +
+                    '<span class="font-mono tracking-widest text-white/80">' + (vehicleNumber || code || '') +
                     '</span>' + (driverName ? '<span class="text-white/60">' + driverName + '</span>' : '') +
                     (code ? '<span class="font-mono text-xs text-sky-300/80">Card ' + code + '</span>' : '') +
                     (amount != null ? '<span class="text-amber-300">₹' + amount + '</span>' : '') +
@@ -714,7 +724,7 @@
                             showResult(data.status, data.rfid_id, data.time, null, data.amount, data
                                 .vehicle_number, data.driver_name);
                             pushRecent(data.status, data.rfid_id, data.amount, data.vehicle_number, data
-                                .driver_name, data.entry_id);
+                                .driver_name, data.entry_id, data.vehicle_type);
                         }
                         // Stay armed so the attendant can keep scanning the same direction.
                     } else if (data.status === 'unregistered') {
@@ -831,7 +841,7 @@
                         showResult('parked', data.rfid_id, data.time, null, null, data.vehicle_number, data
                             .driver_name);
                         pushRecent('parked', data.rfid_id, null, data.vehicle_number, data.driver_name, data
-                            .entry_id);
+                            .entry_id, data.vehicle_type);
                     } else {
                         const firstError = data.errors ? Object.values(data.errors)[0]?.[0] : null;
                         registerError.textContent = firstError || data.error ||
@@ -888,7 +898,7 @@
                         showResult('parked', data.rfid_id, data.time, null, null, data.vehicle_number, data
                             .driver_name);
                         pushRecent('parked', data.rfid_id, null, data.vehicle_number, data.driver_name, data
-                            .entry_id);
+                            .entry_id, data.vehicle_type);
                     } else {
                         detailsError.textContent = data.error || 'Could not save details, please try again';
                         detailsError.classList.remove('hidden');
@@ -984,7 +994,7 @@
                         showResult(e.status === 'error' ? null : e.status, e.rfid_id, new Date()
                             .toLocaleString(), e.message, e.amount, e.vehicle_number, e.driver_name);
                         if (e.status === 'parked' || e.status === 'exit') pushRecent(e.status, e.rfid_id, e
-                            .amount, e.vehicle_number, e.driver_name, e.entry_id);
+                            .amount, e.vehicle_number, e.driver_name, e.entry_id, e.vehicle_type);
                     });
                     return;
                 }

@@ -34,7 +34,9 @@ class RfidScanned implements ShouldBroadcastNow
 
     public $lot;
 
-    public function __construct($rfid_id, $status, $message = null, $entry_id = null, $amount = null, $vehicle_number = null, $driver_name = null, $kiosk = null, $lot = null)
+    public $vehicle_type;
+
+    public function __construct($rfid_id, $status, $message = null, $entry_id = null, $amount = null, $vehicle_number = null, $driver_name = null, $kiosk = null, $lot = null, $vehicle_type = null)
     {
         $this->rfid_id = $rfid_id;
         $this->status = $status;
@@ -45,6 +47,7 @@ class RfidScanned implements ShouldBroadcastNow
         $this->driver_name = $driver_name;
         $this->kiosk = $kiosk;
         $this->lot = $lot;
+        $this->vehicle_type = $vehicle_type;
     }
 
     public function broadcastOn()
@@ -76,6 +79,7 @@ class RfidScanned implements ShouldBroadcastNow
             'driver_name' => $this->driver_name,
             'kiosk' => $this->kiosk,
             'lot' => $this->lot,
+            'vehicle_type' => $this->vehicle_type,
         ];
     }
 }

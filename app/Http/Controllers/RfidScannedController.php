@@ -171,7 +171,7 @@ class RfidScannedController extends Controller
             'parking_lot_id' => $lot->id,
         ]);
 
-        broadcast(new RfidScanned($vehicle->rfid_id, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name, $data['kiosk'] ?? null, $lot->lot_number));
+        broadcast(new RfidScanned($vehicle->rfid_id, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name, $data['kiosk'] ?? null, $lot->lot_number, $entry->vehicle_type));
 
         return response()->json([
             'success' => true,
@@ -180,6 +180,7 @@ class RfidScannedController extends Controller
             'rfid_id' => $vehicle->rfid_id,
             'vehicle_number' => $entry->vehicle_number,
             'driver_name' => $entry->driver_name,
+            'vehicle_type' => $entry->vehicle_type,
             'lot' => $lot->lot_number,
             'lot_name' => $lot->name,
             'time' => now()->toDateTimeString(),
@@ -237,7 +238,7 @@ class RfidScannedController extends Controller
 
         $rfid = $vehicle->rfid_id;
 
-        broadcast(new RfidScanned($rfid, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name, $data['kiosk'] ?? null, $lot->lot_number));
+        broadcast(new RfidScanned($rfid, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name, $data['kiosk'] ?? null, $lot->lot_number, $entry->vehicle_type));
 
         return response()->json([
             'success' => true,
@@ -246,6 +247,7 @@ class RfidScannedController extends Controller
             'rfid_id' => $rfid,
             'vehicle_number' => $entry->vehicle_number,
             'driver_name' => $entry->driver_name,
+            'vehicle_type' => $entry->vehicle_type,
             'lot' => $lot->lot_number,
             'lot_name' => $lot->name,
             'time' => now()->toDateTimeString(),
@@ -310,7 +312,7 @@ class RfidScannedController extends Controller
             'amount' => $amount,
         ]);
 
-        broadcast(new RfidScanned($rfid, 'exit', null, $activeEntry->id, $amount, $activeEntry->vehicle_number, $activeEntry->driver_name, $kioskKey, $lot?->lot_number ?? $activeEntry->parking_lot_id));
+        broadcast(new RfidScanned($rfid, 'exit', null, $activeEntry->id, $amount, $activeEntry->vehicle_number, $activeEntry->driver_name, $kioskKey, $lot?->lot_number ?? $activeEntry->parking_lot_id, $activeEntry->vehicle_type ?? $vehicle->vehicle_type));
 
         return response()->json([
             'success' => true,
@@ -320,6 +322,7 @@ class RfidScannedController extends Controller
             'entry_id' => $activeEntry->id,
             'vehicle_number' => $activeEntry->vehicle_number,
             'driver_name' => $activeEntry->driver_name,
+            'vehicle_type' => $activeEntry->vehicle_type ?? $vehicle->vehicle_type,
             'time' => $exitTime->toDateTimeString(),
         ]);
     }
