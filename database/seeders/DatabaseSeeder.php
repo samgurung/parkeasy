@@ -18,7 +18,10 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        $this->call(ParkingLotSeeder::class);
+        $this->call([
+            ParkingLotSeeder::class,
+            KioskSeeder::class,
+        ]);
 
         User::firstOrCreate(
             ['email' => 'test@example.com'],
