@@ -25,6 +25,17 @@
                     </span>
                     <span id="live-chip-label">Live · listening</span>
                 </span>
+                <label class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80">
+                    <i class="fas fa-map-location-dot"></i>
+                    <select wire:model="lotId" wire:change="refresh"
+                            class="bg-transparent text-sm font-bold text-white outline-none [&>option]:text-black">
+                        @forelse ($lots as $lot)
+                            <option value="{{ $lot->id }}">#{{ $lot->lot_number }} — {{ $lot->name }}</option>
+                        @empty
+                            <option value="">No parking lots</option>
+                        @endforelse
+                    </select>
+                </label>
                 <a href="{{ route('admin.floors') }}"
                    class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
                     <i class="fas fa-gear"></i> Configure
@@ -98,6 +109,7 @@
                 <div wire:key="floor-{{ $floor->id }}"
                      data-floor-section
                      data-floor-number="{{ $floor->floor_number }}"
+                     data-lot="{{ $floor->lot->lot_number }}"
                      class="rounded-3xl border border-white/15 bg-white/10 px-6 py-6 shadow-2xl backdrop-blur-xl">
 
                     <header class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -106,7 +118,12 @@
                                 {{ $floor->floor_number }}
                             </span>
                             <div>
-                                <div class="text-lg font-bold">{{ $floor->name }}</div>
+                                <div class="flex items-center gap-2 text-lg font-bold">
+                                    {{ $floor->name }}
+                                    <span class="rounded-full bg-teal-500/20 border border-teal-400/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-teal-300">
+                                        Parking Lot #{{ $floor->lot->lot_number }} — {{ $floor->lot->name }}
+                                    </span>
+                                </div>
                                 <div class="text-xs text-white/50">
                                     <span data-occ-count class="font-semibold text-rose-400">
                                         {{ $floor->slots->where('is_occupied', true)->count() }}
@@ -136,6 +153,7 @@
                             <div wire:key="slot-{{ $slot->id }}"
                                  data-slot-cell
                                  data-floor="{{ $floor->floor_number }}"
+                                 data-lot="{{ $floor->lot->lot_number }}"
                                  data-slot="{{ $slot->slot_number }}"
                                  data-occupied="{{ $occupied ? 1 : 0 }}"
                                  data-updated="{{ $slot->last_updated_at?->toIso8601String() }}"
@@ -289,7 +307,7 @@
 
                 window.Echo.channel('parking-slots').listen('SlotStatusChanged', (e) => {
                     const cell = document.querySelector(
-                        '[data-slot-cell][data-floor="' + e.floor_number + '"][data-slot="' + e.slot_number + '"]'
+                        '[data-slot-cell][data-lot="' + e.lot_number + '"][data-floor="' + e.floor_number + '"][data-slot="' + e.slot_number + '"]'
                     );
                     if (cell) setSlotCell(cell, Boolean(e.is_occupied), e.last_updated_at);
                     refreshStats();

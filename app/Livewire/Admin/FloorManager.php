@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin;
 
 use App\Models\ParkingFloor;
+use App\Models\ParkingLot;
 use Illuminate\View\View;
 use Livewire\Attributes\Rule;
 use Livewire\Component;
@@ -10,6 +11,9 @@ use Livewire\Component;
 class FloorManager extends Component
 {
     // ── Add-floor form ────────────────────────────────────────────────────────
+
+    #[Rule('required|exists:parking_lots,id')]
+    public ?int $lotId = null;
 
     #[Rule('required|string|max:100')]
     public string $name = '';
@@ -20,6 +24,9 @@ class FloorManager extends Component
     // ── Edit-floor form ───────────────────────────────────────────────────────
 
     public ?int $editingId = null;
+
+    #[Rule('required|exists:parking_lots,id')]
+    public ?int $editLotId = null;
 
     public string $editName = '';
 
@@ -34,7 +41,8 @@ class FloorManager extends Component
     public function render(): View
     {
         return view('livewire.admin.floor-manager', [
-            'floors' => ParkingFloor::withCount([
+            'lots' => ParkingLot::orderBy('lot_number')->get(),
+            'floors' => ParkingFloor::with('lot')->withCount([
                 'slots',
                 'slots as occupied_slots_count' => fn ($q) => $q->where('is_occupied', true),
             ])->orderBy('floor_number')->get(),
@@ -46,20 +54,25 @@ class FloorManager extends Component
     public function addFloor(): void
     {
         $this->validate([
+            'lotId' => 'required|exists:parking_lots,id',
             'name' => 'required|string|max:100',
             'slotCount' => 'required|integer|min:1|max:500',
         ]);
 
-        // Auto-assign the next free floor number (1, 2, 3, ...).
+        // Auto-assign the next free floor number within the chosen lot.
+        $nextFloor = ParkingFloor::where('parking_lot_id', $this->lotId)
+            ->max('floor_number') + 1;
+
         $floor = ParkingFloor::create([
+            'parking_lot_id' => $this->lotId,
             'name' => trim($this->name),
-            'floor_number' => (int) ParkingFloor::max('floor_number') + 1,
+            'floor_number' => (int) $nextFloor,
             'slot_count' => (int) $this->slotCount,
         ]);
 
         $floor->syncSlots();
 
-        $this->reset(['name', 'slotCount']);
+        $this->reset(['lotId', 'name', 'slotCount']);
         $this->dispatch('floor-saved');
     }
 
@@ -69,6 +82,7 @@ class FloorManager extends Component
     {
         $floor = ParkingFloor::findOrFail($id);
         $this->editingId = $id;
+        $this->editLotId = $floor->parking_lot_id;
         $this->editName = $floor->name;
         $this->editSlotCount = (string) $floor->slot_count;
     }
@@ -76,12 +90,15 @@ class FloorManager extends Component
     public function saveEdit(): void
     {
         $this->validate([
+            'editLotId' => 'required|exists:parking_lots,id',
             'editName' => 'required|string|max:100',
             'editSlotCount' => 'required|integer|min:1|max:500',
         ]);
 
         $floor = ParkingFloor::findOrFail($this->editingId);
+
         $floor->update([
+            'parking_lot_id' => $this->editLotId,
             'name' => trim($this->editName),
             'slot_count' => (int) $this->editSlotCount,
         ]);

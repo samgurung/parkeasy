@@ -28,9 +28,17 @@
             </div>
             <div class="flex items-center gap-4">
                 <nav class="flex flex-col items-stretch gap-2 sm:flex-row">
+                    <a href="{{ route('lots.overview') }}"
+                        class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
+                        <i class="fas fa-chart-line"></i> Lot Report
+                    </a>
                     <a href="{{ route('slots.dashboard') }}"
                         class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
                         <i class="fas fa-map-location-dot"></i> Slot Monitor
+                    </a>
+                    <a href="{{ route('admin.lots') }}"
+                        class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
+                        <i class="fas fa-building"></i> Parking Lots
                     </a>
                     <a href="{{ route('admin.floors') }}"
                         class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">

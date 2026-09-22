@@ -20,6 +20,10 @@ class SlotStatusChanged implements ShouldBroadcastNow
 
     public int $slotId;
 
+    public int $lotNumber;
+
+    public string $lotName;
+
     public int $floorNumber;
 
     public string $floorName;
@@ -33,8 +37,11 @@ class SlotStatusChanged implements ShouldBroadcastNow
     public function __construct(ParkingSlot $slot)
     {
         $floor = $slot->floor;
+        $lot   = $floor->lot;
 
         $this->slotId        = $slot->id;
+        $this->lotNumber     = $lot->lot_number;
+        $this->lotName       = $lot->name;
         $this->floorNumber   = $floor->floor_number;
         $this->floorName     = $floor->name;
         $this->slotNumber    = $slot->slot_number;
@@ -52,6 +59,8 @@ class SlotStatusChanged implements ShouldBroadcastNow
     {
         return [
             'slot_id'         => $this->slotId,
+            'lot_number'      => $this->lotNumber,
+            'lot_name'        => $this->lotName,
             'floor_number'    => $this->floorNumber,
             'floor_name'      => $this->floorName,
             'slot_number'     => $this->slotNumber,

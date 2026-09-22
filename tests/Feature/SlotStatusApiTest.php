@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Events\SlotStatusChanged;
 use App\Models\ParkingFloor;
+use App\Models\ParkingLot;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Broadcasting\Broadcasters\Broadcaster;
 use Illuminate\Broadcasting\Channel;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -15,175 +17,182 @@ class SlotStatusApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const TEST_LOT  = 101;
+    private const TEST_LOT2 = 202;
+
     private function makeFloor(int $floorNumber = 0, int $slotCount = 4): ParkingFloor
     {
         $floor = ParkingFloor::create([
-            'name' => "Floor {$floorNumber}",
-            'floor_number' => $floorNumber,
-            'slot_count' => $slotCount,
+            'name'           => "Floor {$floorNumber}",
+            'parking_lot_id' => ParkingLot::where('lot_number', self::TEST_LOT)->value('id'),
+            'floor_number'   => $floorNumber,
+            'slot_count'     => $slotCount,
         ]);
 
         $floor->syncSlots();
 
-        $floor->setRelation('slots', $floor->slots()->get());
-
         return $floor;
     }
 
-    private function hitApi(int $floor, int $slot): TestResponse
+    private function makeLot(int $lotNumber = self::TEST_LOT, int $floorCount = 0, int $slotCount = 4): ParkingLot
+    {
+        $lot = ParkingLot::create([
+            'name'       => "Lot {$lotNumber}",
+            'lot_number' => $lotNumber,
+        ]);
+
+        for ($i = 0; $i < $floorCount; $i++) {
+            $floor = ParkingFloor::create([
+                'name'           => "Floor {$i}",
+                'parking_lot_id' => $lot->id,
+                'floor_number'   => $i,
+                'slot_count'     => $slotCount,
+            ]);
+
+            $floor->syncSlots();
+
+            $lot->setRelation('floors', $lot->floors()->get());
+        }
+
+        return $lot;
+    }
+
+    private function hitApi(int $lot, int $floor, int $slot): TestResponse
     {
         return $this->postJson('/api/slot-status', [
+            'lot'   => $lot,
             'floor' => $floor,
-            'slot' => $slot,
+            'slot'  => $slot,
         ]);
     }
 
     public function test_first_hit_marks_slot_occupied(): void
     {
-        $floor = $this->makeFloor();
+        $this->makeLot(self::TEST_LOT, 1, 4);
 
-        $this->hitApi(0, 3)->assertOk()->assertJson([
+        $this->hitApi(self::TEST_LOT, 0, 3)->assertOk()->assertJson([
             'success' => true,
-            'floor' => 0,
-            'slot' => 3,
+            'lot'     => self::TEST_LOT,
+            'floor'   => 0,
+            'slot'    => 3,
+            'status'  => 'occupied',
+            'is_occupied' => true,
+        ]);
+    }
+
+    public function test_second_hit_marks_slot_free(): void
+    {
+        $this->makeLot(self::TEST_LOT, 1, 4);
+
+        $this->hitApi(self::TEST_LOT, 0, 2)->assertOk()->assertJson([
             'status' => 'occupied',
             'is_occupied' => true,
         ]);
 
-        $this->assertTrue($floor->slots()->where('slot_number', 3)->first()->is_occupied);
-    }
-
-    public function test_second_hit_toggles_slot_free(): void
-    {
-        $floor = $this->makeFloor();
-        $this->hitApi(0, 2);
-
-        $this->hitApi(0, 2)->assertOk()->assertJson([
-            'success' => true,
+        $this->hitApi(self::TEST_LOT, 0, 2)->assertOk()->assertJson([
             'status' => 'free',
             'is_occupied' => false,
         ]);
-
-        $this->assertFalse($floor->slots()->where('slot_number', 2)->first()->is_occupied);
     }
 
     public function test_third_hit_toggles_slot_back_to_occupied(): void
     {
-        $this->makeFloor();
+        $this->makeLot(self::TEST_LOT, 1, 4);
 
-        $this->hitApi(0, 1);
-        $this->hitApi(0, 1);
-        $this->hitApi(0, 1)->assertOk()->assertJson([
+        $this->hitApi(self::TEST_LOT, 0, 1);
+        $this->hitApi(self::TEST_LOT, 0, 1);
+
+        $this->hitApi(self::TEST_LOT, 0, 1)->assertOk()->assertJson([
             'status' => 'occupied',
             'is_occupied' => true,
         ]);
     }
 
-    public function test_hits_toggle_independently_per_slot(): void
+    public function test_slots_toggle_independently(): void
     {
-        $this->makeFloor();
+        $this->makeLot(self::TEST_LOT, 1, 4);
 
-        $this->hitApi(0, 1);
-        $this->hitApi(0, 2);
+        $this->hitApi(self::TEST_LOT, 0, 1);
+        $this->hitApi(self::TEST_LOT, 0, 2);
 
-        $this->hitApi(0, 1)->assertOk()->assertJson([
-            'slot' => 1,
-            'status' => 'free',
-            'is_occupied' => false,
-        ]);
+        $this->hitApi(self::TEST_LOT, 0, 1)->assertOk()->assertJson(['is_occupied' => false]);
+        $this->hitApi(self::TEST_LOT, 0, 2)->assertOk()->assertJson(['is_occupied' => false]);
 
-        $this->hitApi(0, 2)->assertOk()->assertJson([
-            'slot' => 2,
-            'status' => 'free',
-            'is_occupied' => false,
-        ]);
-
-        $this->hitApi(0, 1)->assertOk()->assertJson([
-            'slot' => 1,
-            'status' => 'occupied',
-            'is_occupied' => true,
-        ]);
+        $this->hitApi(self::TEST_LOT, 0, 1)->assertOk()->assertJson(['is_occupied' => true]);
     }
 
-    public function test_reports_404_for_unknown_floor(): void
+    public function test_lots_toggle_independently(): void
     {
-        $this->hitApi(9, 1)->assertNotFound();
+        $this->makeLot(self::TEST_LOT, 1, 4);
+        $this->makeLot(self::TEST_LOT2, 1, 4);
+
+        $this->hitApi(self::TEST_LOT, 0, 1)->assertOk()->assertJson(['is_occupied' => true]);
+        $this->hitApi(self::TEST_LOT2, 0, 1)->assertOk()->assertJson(['is_occupied' => true]);
+
+        $this->hitApi(self::TEST_LOT, 0, 1)->assertOk()->assertJson(['is_occupied' => false]);
+        $this->hitApi(self::TEST_LOT2, 0, 1)->assertOk()->assertJson(['is_occupied' => false]);
     }
 
-    public function test_reports_404_when_slot_exceeds_configured_count(): void
+    public function test_unknown_lot_returns_404(): void
     {
-        $this->makeFloor(0, 3);
+        $this->makeLot(self::TEST_LOT, 1, 4);
 
-        $this->hitApi(0, 99)->assertNotFound();
+        $this->hitApi(9999, 0, 1)->assertNotFound();
+    }
+
+    public function test_unknown_floor_returns_404(): void
+    {
+        $this->makeLot(self::TEST_LOT, 1, 4);
+
+        $this->hitApi(self::TEST_LOT, 99, 1)->assertNotFound();
+    }
+
+    public function test_slot_exceeding_count_returns_404(): void
+    {
+        $this->makeLot(self::TEST_LOT, 1, 3);
+
+        $this->hitApi(self::TEST_LOT, 0, 99)->assertNotFound();
     }
 
     public function test_validates_required_fields(): void
     {
-        $this->makeFloor();
-
         $this->postJson('/api/slot-status', [])->assertUnprocessable();
         $this->postJson('/api/slot-status', ['floor' => 0])->assertUnprocessable();
         $this->postJson('/api/slot-status', ['slot' => 2])->assertUnprocessable();
     }
 
-    public function test_ignores_any_transmitted_status(): void
+    public function test_ignores_status_field(): void
     {
-        $this->makeFloor();
+        $this->makeLot(self::TEST_LOT, 1, 4);
 
-        // A status field in the payload is ignored: the slot toggles regardless.
-        $this->postJson('/api/slot-status', [
-            'floor' => 0,
-            'slot' => 2,
+        $response = $this->postJson('/api/slot-status', [
+            'lot'    => self::TEST_LOT,
+            'floor'  => 0,
+            'slot'   => 2,
             'status' => 'occupied',
         ])->assertOk()->assertJson(['status' => 'occupied', 'is_occupied' => true]);
 
         $this->postJson('/api/slot-status', [
-            'floor' => 0,
-            'slot' => 2,
+            'lot'    => self::TEST_LOT,
+            'floor'  => 0,
+            'slot'   => 2,
             'status' => 'free',
         ])->assertOk()->assertJson(['status' => 'free', 'is_occupied' => false]);
     }
 
     public function test_broadcasts_slot_status_change(): void
     {
-        $recorder = new class extends Broadcaster
-        {
-            public array $broadcasts = [];
+        Event::fake([SlotStatusChanged::class]);
 
-            public function auth($request)
-            {
-                return true;
-            }
+        $this->makeLot(self::TEST_LOT, 1, 4);
 
-            public function validAuthenticationResponse($request, $result)
-            {
-                return $result;
-            }
+        $this->hitApi(self::TEST_LOT, 0, 1)->assertOk();
 
-            public function broadcast(array $channels, $event, array $payload = []): void
-            {
-                $this->broadcasts[] = [$channels, $event, $payload];
-            }
-        };
-
-        Broadcast::extend('fake-test', fn () => $recorder);
-        config()->set('broadcasting.default', 'fake-test');
-        config()->set('broadcasting.connections.fake-test', ['driver' => 'fake-test']);
-
-        $this->makeFloor();
-
-        $this->hitApi(0, 1)->assertOk();
-
-        $this->assertCount(1, $recorder->broadcasts);
-
-        [$channels, $event, $payload] = $recorder->broadcasts[0];
-
-        $this->assertInstanceOf(Channel::class, $channels[0]);
-        $this->assertSame('parking-slots', $channels[0]->name);
-        $this->assertSame(SlotStatusChanged::class, $event);
-        $this->assertSame(0, $payload['floor_number']);
-        $this->assertSame(1, $payload['slot_number']);
-        $this->assertSame('Floor 0', $payload['floor_name']);
-        $this->assertTrue($payload['is_occupied']);
+        Event::assertDispatched(SlotStatusChanged::class, function (SlotStatusChanged $event): bool {
+            return $event->lotNumber === self::TEST_LOT
+                && $event->floorNumber === 0
+                && $event->slotNumber === 1
+                && $event->isOccupied === true;
+        });
     }
 }

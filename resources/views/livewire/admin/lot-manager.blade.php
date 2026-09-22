@@ -13,9 +13,9 @@
         <header class="flex items-center justify-between gap-4 mb-8">
             <div>
                 <h1 class="text-3xl font-black uppercase tracking-widest">
-                    <span class="text-sky-400">Admin</span> — Floors
+                    <span class="text-sky-400">Admin</span> — Parking Lots
                 </h1>
-                <p class="mt-1 text-sm text-white/60">Configure parking floors and slot counts</p>
+                <p class="mt-1 text-sm text-white/60">Configure parking lots</p>
             </div>
             <a href="{{ route('slots.dashboard') }}"
                class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
@@ -23,93 +23,67 @@
             </a>
         </header>
 
-        {{-- Add floor form --}}
+        {{-- Add lot form --}}
         <section class="rounded-3xl border border-white/15 bg-white/10 px-6 py-6 shadow-2xl backdrop-blur-xl mb-8">
             <h2 class="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-white/50 flex items-center gap-2">
-                <i class="fas fa-plus-circle text-sky-400"></i> Add New Floor
+                <i class="fas fa-plus-circle text-sky-400"></i> Add New Parking Lot
             </h2>
-            <form wire:submit="addFloor" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <form wire:submit="add" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="lotId">Parking Lot</label>
-                    <select id="lotId" wire:model="lotId"
-                            class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-white outline-none focus:border-sky-400 focus:bg-white/15">
-                        <option value="">— Choose a parking lot —</option>
-                        @foreach ($lots as $lot)
-                            <option value="{{ $lot->id }}">#{{ $lot->lot_number }} — {{ $lot->name }}</option>
-                        @endforeach
-                    </select>
-                    @error('lotId') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
-                </div>
-                <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="name">Floor Name</label>
-                    <input id="name" wire:model="name" type="text" placeholder="e.g. Ground Floor"
+                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="name">Parking Lot Name</label>
+                    <input id="name" wire:model="name" type="text" placeholder="e.g. Main Garage"
                            class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
                     @error('name') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
                 </div>
                 <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="slotCount">Slot Count</label>
-                    <input id="slotCount" wire:model="slotCount" type="number" min="1" max="500" placeholder="e.g. 20"
+                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="address">Address</label>
+                    <input id="address" wire:model="address" type="text" placeholder="e.g. 123 Main Street"
                            class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
-                    @error('slotCount') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                    @error('address') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                </div>
+                <div class="flex items-end">
+                    <button type="submit"
+                            class="w-full rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 px-6 py-3 text-sm font-black uppercase tracking-[0.2em] text-white shadow-lg hover:brightness-110 transition">
+                        <i class="fas fa-plus mr-2"></i> Add Parking Lot
+                    </button>
                 </div>
                 <p class="text-xs text-white/40 sm:col-span-2">
                     <i class="fas fa-circle-info mr-1 text-sky-400"></i>
-                    Floor numbers are assigned automatically within the chosen parking lot: first floor = 1, second = 2, and so on.
+                    The parking lot number is assigned automatically (1, 2, 3, …) and used by the ESP32 to address this parking lot.
                 </p>
-                <div class="sm:col-span-2">
-                    <button type="submit"
-                            class="rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 px-6 py-3 text-sm font-black uppercase tracking-[0.2em] text-white shadow-lg hover:brightness-110 transition">
-                        <i class="fas fa-plus mr-2"></i> Add Floor
-                    </button>
-                </div>
             </form>
         </section>
 
-        {{-- Floors list --}}
+        {{-- Lots list --}}
         <section>
             <h2 class="mb-3 text-xs font-bold uppercase tracking-[0.3em] text-white/50 flex items-center gap-2">
-                <i class="fas fa-layer-group text-teal-400"></i> Configured Floors
+                <i class="fas fa-building text-teal-400"></i> Configured Parking Lots
             </h2>
 
-            @forelse ($floors as $floor)
+            @forelse ($lots as $lot)
                 <div class="mb-4 rounded-2xl border border-white/15 bg-white/10 px-6 py-5 shadow-xl backdrop-blur-xl">
 
-                    @if ($editingId === $floor->id)
+                    @if ($editingId === $lot->id)
                         {{-- Inline edit form --}}
-                        <form wire:submit="saveEdit" class="grid grid-cols-1 gap-4 sm:grid-cols-2 items-end">
+                        <form wire:submit="save" class="grid grid-cols-1 gap-4 sm:grid-cols-2 items-end">
                             <div>
-                                <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Parking Lot</label>
-                                <select wire:model="editLotId"
-                                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-white outline-none focus:border-sky-400 focus:bg-white/15">
-                                    @foreach ($lots as $lot)
-                                        <option value="{{ $lot->id }}">#{{ $lot->lot_number }} — {{ $lot->name }}</option>
-                                    @endforeach
-                                </select>
-                                @error('editLotId') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Floor Name</label>
+                                <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Parking Lot Name</label>
                                 <input wire:model="editName" type="text"
                                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-white outline-none focus:border-sky-400 focus:bg-white/15" />
                                 @error('editName') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
                             </div>
                             <div>
-                                <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Floor #</label>
-                                <input type="text" value="{{ $floor->floor_number }}" disabled
-                                       class="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-white/40 cursor-not-allowed" />
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Slot Count</label>
-                                <input wire:model="editSlotCount" type="number" min="1" max="500"
+                                <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Address</label>
+                                <input wire:model="editAddress" type="text"
                                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-white outline-none focus:border-sky-400 focus:bg-white/15" />
-                                @error('editSlotCount') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                                @error('editAddress') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
                             </div>
                             <div class="sm:col-span-2 flex gap-3">
                                 <button type="submit"
                                         class="rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-white shadow hover:brightness-110 transition">
                                     <i class="fas fa-check mr-1"></i> Save
                                 </button>
-                                <button type="button" wire:click="cancelEdit"
+                                <button type="button" wire:click="cancel"
                                         class="rounded-xl border border-white/20 bg-white/10 px-5 py-2 text-sm font-bold text-white/70 hover:bg-white/20 transition">
                                     Cancel
                                 </button>
@@ -120,29 +94,26 @@
                         {{-- Read view --}}
                         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div class="flex items-center gap-4">
-                                <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 text-xl font-black text-white shadow">
-                                    {{ $floor->floor_number }}
+                                <span class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-emerald-600 text-xl font-black text-white shadow">
+                                    {{ $lot->lot_number }}
                                 </span>
                                 <div>
-                                    <div class="text-lg font-bold">
-                                        {{ $floor->name }}
-                                        <span class="ml-2 rounded-full bg-teal-500/20 border border-teal-400/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-teal-300">
-                                            Parking Lot #{{ $floor->lot->lot_number }} — {{ $floor->lot->name }}
-                                        </span>
-                                    </div>
+                                    <div class="text-lg font-bold">{{ $lot->name }}</div>
                                     <div class="text-xs text-white/50">
-                                        {{ $floor->slot_count }} slots &bull;
-                                        <span class="text-rose-400">{{ $floor->occupied_slots_count }} occupied</span> &bull;
-                                        <span class="text-emerald-400">{{ $floor->slot_count - $floor->occupied_slots_count }} free</span>
+                                        {{ $lot->floors_count }} floor{{ $lot->floors_count === 1 ? '' : 's' }} &bull;
+                                        <span class="text-teal-300">PARKING LOT #{{ $lot->lot_number }}</span>
+                                        @if ($lot->address)
+                                            &bull; {{ $lot->address }}
+                                        @endif
                                     </div>
                                 </div>
                             </div>
                             <div class="flex gap-3">
-                                <button wire:click="startEdit({{ $floor->id }})"
+                                <button wire:click="edit({{ $lot->id }})"
                                         class="rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-sky-300 hover:bg-sky-500/20 transition">
                                     <i class="fas fa-pen mr-1"></i> Edit
                                 </button>
-                                <button wire:click="confirmDelete({{ $floor->id }})"
+                                <button wire:click="confirmDelete({{ $lot->id }})"
                                         class="rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-rose-300 hover:bg-rose-500/20 transition">
                                     <i class="fas fa-trash mr-1"></i> Delete
                                 </button>
@@ -152,7 +123,7 @@
                 </div>
             @empty
                 <div class="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-white/40 italic">
-                    No floors configured yet. Add one above.
+                    No parking lots configured yet. Add one above.
                 </div>
             @endforelse
         </section>
@@ -160,14 +131,14 @@
     </div>
 
     {{-- Delete confirmation modal --}}
-    @if ($confirmDeleteId)
+    @if ($deletingId)
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
             <div class="result-pop relative w-full max-w-sm rounded-[2rem] border border-rose-400/30 bg-white/15 p-10 text-center shadow-2xl backdrop-blur-2xl">
                 <i class="fas fa-triangle-exclamation text-6xl text-rose-400 mb-4"></i>
-                <div class="text-2xl font-black uppercase tracking-widest mb-2">Delete Floor?</div>
-                <p class="text-sm text-white/60 mb-6">This will permanently delete the floor and all its slot data.</p>
+                <div class="text-2xl font-black uppercase tracking-widest mb-2">Delete Parking Lot?</div>
+                <p class="text-sm text-white/60 mb-6">This will permanently delete the parking lot and all its floors and slot data.</p>
                 <div class="flex gap-4 justify-center">
-                    <button wire:click="deleteFloor"
+                    <button wire:click="delete"
                             class="rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 px-6 py-3 text-sm font-black uppercase tracking-widest text-white shadow hover:brightness-110 transition">
                         <i class="fas fa-trash mr-1"></i> Delete
                     </button>
