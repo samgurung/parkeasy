@@ -18,9 +18,8 @@ export default defineConfig({
     ],
     server: {
         host: "0.0.0.0",
-        hmr: {
+        ws: {
             host: "parkeasy.test",
-            protocol: "wss",
         },
         cors: {
             origin: /https:\/\/parkeasy\.test$/,
