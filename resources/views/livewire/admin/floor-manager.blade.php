@@ -17,19 +17,6 @@
                 </h1>
                 <x-setup-steps current="floors" />
             </div>
-
-            @if ($lotId && $selectedLot)
-                <div class="flex items-center gap-3 rounded-xl border border-teal-400/30 bg-teal-500/10 px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-teal-200">
-                    <i class="fas fa-filter text-teal-300"></i>
-                    <span>
-                        <span class="text-white/50">Showing</span>
-                        Lot #{{ $selectedLot->lot_number }} — {{ $selectedLot->name }}
-                    </span>
-                    <button wire:click="$set('lotId', null)"
-                            class="rounded-lg bg-white/10 px-2 py-1 text-[10px] font-black text-white/70 transition hover:bg-white/20 hover:text-white"
-                            title="Show floors of all parking lots">All lots</button>
-                </div>
-            @endif
         </header>
 
         {{-- Add floor form --}}
@@ -76,13 +63,43 @@
 
         {{-- Floors list --}}
         <section>
-            <h2 class="mb-3 text-xs font-bold uppercase tracking-[0.3em] text-white/50 flex items-center gap-2">
+            <div class="mb-3 flex items-end justify-between gap-3">
+            <h2 class="text-xs font-bold uppercase tracking-[0.3em] text-white/50 flex items-center gap-2">
                 <i class="fas fa-layer-group text-teal-400"></i>
-                {{ $lotId && $selectedLot ? "Floors — Lot #{$selectedLot->lot_number}" : 'Configured Floors' }}
+                {{ $filterLotId && $selectedLot ? "Floors — Lot #{$selectedLot->lot_number}" : 'Configured Floors' }}
             </h2>
+            <label class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-xs font-bold text-white/80">
+                <i class="fas fa-location-dot text-teal-300"></i>
+                <select wire:model.live.change="filterLotId" title="Filter the floors list by lot"
+                        class="bg-transparent text-sm font-bold text-white outline-none [&>option]:text-black">
+                    <option value="">All lots</option>
+                    @foreach ($lots as $lot)
+                        <option value="{{ $lot->id }}">#{{ $lot->lot_number }} — {{ $lot->name }} ({{ $lot->floors_count }} {{ $lot->floors_count === 1 ? 'floor' : 'floors' }})</option>
+                    @endforeach
+                </select>
+            </label>
+        </div>
 
-            @forelse ($floors as $floor)
-                <div class="mb-4 rounded-2xl border border-white/15 bg-white/10 px-6 py-5 shadow-xl backdrop-blur-xl">
+            @forelse ($floorGroups as $group)
+                @unless ($filterLotId)
+                    {{-- Lot group header --}}
+                    <div class="mb-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-emerald-600 text-sm font-black text-white shadow">
+                            {{ $group['lot']->lot_number }}
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-bold text-white">{{ $group['lot']->name }}</div>
+                            <div class="text-xs text-white/50">
+                                {{ $group['floors']->count() }} {{ $group['floors']->count() === 1 ? 'floor' : 'floors' }}
+                                &bull; {{ $group['floors']->sum('slots_count') }} slots
+                            </div>
+                        </div>
+                    </div>
+                @endunless
+
+                <div class="space-y-4">
+                    @foreach ($group['floors'] as $floor)
+                        <div class="rounded-2xl border border-white/15 bg-white/10 px-6 py-5 shadow-xl backdrop-blur-xl">
 
                     @if ($editingId === $floor->id)
                         {{-- Inline edit form --}}
@@ -136,14 +153,11 @@
                                 <div>
                                     <div class="text-lg font-bold">
                                         {{ $floor->name }}
-                                        @unless ($lotId)
-                                            <span class="ml-2 rounded-full bg-teal-500/20 border border-teal-400/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-teal-300">
-                                                Parking Lot #{{ $floor->lot->lot_number }} — {{ $floor->lot->name }}
-                                            </span>
-                                        @endunless
                                     </div>
                                     <div class="text-xs text-white/50">
                                         {{ $floor->slot_count }} slots &bull;
+                                        <span class="text-sky-300">{{ $floor->two_wheeler_slots_count }} two-wheeler</span> &bull;
+                                        <span class="text-teal-300">{{ $floor->slot_count - $floor->two_wheeler_slots_count }} four-wheeler</span> &bull;
                                         <span class="text-rose-400">{{ $floor->occupied_slots_count }} occupied</span> &bull;
                                         <span class="text-emerald-400">{{ $floor->slot_count - $floor->occupied_slots_count }} free</span>
                                     </div>
@@ -160,16 +174,72 @@
                                 </button>
                             </div>
                         </div>
+
+                        {{-- Slot type designation chips --}}
+                        <div class="mt-4 border-t border-white/10 pt-4">
+                            <div class="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
+                                <i class="fas fa-motorcycle text-sky-300"></i>
+                                @php
+                                    $floorPendingCount = $floor->slots
+                                        ->filter(fn ($slot) => array_key_exists($slot->id, $pendingTypeChanges))
+                                        ->count();
+                                @endphp
+                                @if ($floorPendingCount > 0)
+                                    <span class="text-amber-300">{{ $floorPendingCount }} {{ $floorPendingCount === 1 ? 'change' : 'changes' }} pending on this floor — tap Apply to save</span>
+                                @else
+                                    Tap a slot to stage a 2W / 4W change, then Apply to save it
+                                @endif
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                @foreach ($floor->slots as $slot)
+                                    @php
+                                        $isPending = array_key_exists($slot->id, $pendingTypeChanges);
+                                        $isTwoWheeler = $isPending
+                                            ? $pendingTypeChanges[$slot->id] === \App\Models\ParkingLot::VEHICLE_TWO_WHEELER
+                                            : $slot->vehicle_type === \App\Models\ParkingLot::VEHICLE_TWO_WHEELER;
+                                    @endphp
+                                    <button wire:click="toggleSlotType({{ $slot->id }})"
+                                            title="{{ $isPending ? 'Pending — will become ' . ($isTwoWheeler ? '2W' : '4W') . '. Tap again to undo.' : 'Tap to stage a type change' }}"
+                                            class="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition hover:brightness-125 {{ $isPending ? 'border-amber-400/60 bg-amber-500/15 text-amber-300' : ($isTwoWheeler ? 'border-sky-400/50 bg-sky-500/15 text-sky-300' : 'border-teal-400/40 bg-teal-500/10 text-teal-300') }}">
+                                        <i class="fas {{ $isTwoWheeler ? 'fa-motorcycle' : 'fa-car' }} text-[10px]"></i>
+                                        <span>{{ $slot->displayLabel() }}</span>
+                                        <span class="text-[9px] uppercase {{ $isPending ? 'text-amber-200/80' : ($isTwoWheeler ? 'text-sky-200/70' : 'text-teal-200/70') }}">
+                                            {{ $isTwoWheeler ? '2W' : '4W' }}{{ $isPending ? ' ⇄' : '' }}
+                                        </span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
                     @endif
+                        </div>
+                    @endforeach
                 </div>
             @empty
                 <div class="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center text-white/40 italic">
-                    {{ $lotId && $selectedLot ? "No floors configured for {$selectedLot->name} yet. Add one above." : 'No floors configured yet. Add one above.' }}
+                    {{ $filterLotId && $selectedLot ? "No floors configured for {$selectedLot->name} yet. Add one above." : 'No floors configured yet. Add one above.' }}
                 </div>
             @endforelse
         </section>
 
     </div>
+
+    {{-- Confirm slot type changes bar --}}
+    @if (count($pendingTypeChanges) > 0)
+        <div class="fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-4 rounded-2xl border border-amber-400/40 bg-black/80 px-6 py-4 shadow-2xl backdrop-blur-xl">
+            <span class="whitespace-nowrap text-sm font-bold uppercase tracking-widest text-amber-300">
+                <i class="fas fa-triangle-exclamation mr-2"></i>
+                {{ count($pendingTypeChanges) }} {{ count($pendingTypeChanges) === 1 ? 'change' : 'changes' }}
+            </span>
+            <button wire:click="confirmTypeChanges"
+                    class="rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 px-5 py-2.5 text-sm font-black uppercase tracking-widest text-white shadow hover:brightness-110 transition">
+                <i class="fas fa-check mr-1"></i> Apply
+            </button>
+            <button wire:click="discardTypeChanges"
+                    class="rounded-xl border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-bold text-white/70 hover:bg-white/20 transition">
+                Discard
+            </button>
+        </div>
+    @endif
 
     {{-- Delete confirmation modal --}}
     @if ($confirmDeleteId)

@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\ParkingFloor;
 use App\Models\ParkingLot;
+use App\Models\ParkingSlot;
 use Illuminate\View\View;
 use Livewire\Attributes\Rule;
 use Livewire\Attributes\Url;
@@ -13,10 +14,7 @@ class FloorManager extends Component
 {
     // ── Add-floor form ────────────────────────────────────────────────────────
 
-    // Also scopes the page when visiting /admin/floors?lot=<id> (e.g. from the
-    // "Floors & Slots" button on a lot), so the list stays focused on one lot.
     #[Rule('required|exists:parking_lots,id')]
-    #[Url(as: 'lot')]
     public ?int $lotId = null;
 
     #[Rule('required|string|max:100')]
@@ -24,6 +22,13 @@ class FloorManager extends Component
 
     #[Rule('required|integer|min:1|max:500')]
     public string $slotCount = '';
+
+    // ── Configured-floors filter ──────────────────────────────────────────────
+    // Scopes the floors list to one lot. Driven by ?lot=<id> (e.g. from the
+    // "Floors & Slots" button on a lot), independent of the add-floor form.
+
+    #[Url(as: 'lot')]
+    public ?int $filterLotId = null;
 
     // ── Edit-floor form ───────────────────────────────────────────────────────
 
@@ -40,23 +45,84 @@ class FloorManager extends Component
 
     public ?int $confirmDeleteId = null;
 
+    // ── Pending slot type changes (staged, applied via confirm bar) ───────────
+    // Keyed by slot id holding the type the slot will become once applied.
+
+    public array $pendingTypeChanges = [];
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     public function render(): View
     {
-        $lots = ParkingLot::orderBy('lot_number')->get();
+        $lots = ParkingLot::withCount('floors')->orderBy('lot_number')->get();
+        $selectedLot = $lots->firstWhere('id', $this->filterLotId);
+
+        $floors = ParkingFloor::with(['lot'])->with(['slots' => fn ($q) => $q->select([
+            'id', 'parking_floor_id', 'slot_number', 'vehicle_type', 'is_occupied',
+        ])])->withCount([
+            'slots',
+            'slots as occupied_slots_count' => fn ($q) => $q->where('is_occupied', true),
+            'slots as two_wheeler_slots_count' => fn ($q) => $q->where('vehicle_type', ParkingLot::VEHICLE_TWO_WHEELER),
+        ])
+            ->when($this->filterLotId, fn ($q) => $q->where('parking_lot_id', $this->filterLotId))
+            ->orderBy('floor_number')
+            ->get();
+
+        // When scoped to a lot we show one group; otherwise group by lot so the
+        // list stays navigable even with many lots and floors.
+        $floorGroups = $this->filterLotId
+            ? collect([['lot' => $selectedLot, 'floors' => $floors]])
+            : $floors->groupBy('parking_lot_id')
+                ->map(fn ($group, $lotId) => [
+                    'lot' => $lots->firstWhere('id', (int) $lotId),
+                    'floors' => $group,
+                ])
+                ->values();
 
         return view('livewire.admin.floor-manager', [
             'lots' => $lots,
-            'selectedLot' => $lots->firstWhere('id', $this->lotId),
-            'floors' => ParkingFloor::with('lot')->withCount([
-                'slots',
-                'slots as occupied_slots_count' => fn ($q) => $q->where('is_occupied', true),
-            ])
-                ->when($this->lotId, fn ($q) => $q->where('parking_lot_id', $this->lotId))
-                ->orderBy('floor_number')
-                ->get(),
+            'selectedLot' => $selectedLot,
+            'floorGroups' => $floorGroups,
         ])->layout('components.layouts.app', ['title' => 'Admin – Floors | ParkEasy']);
+    }
+
+    // ── Slot type designation ─────────────────────────────────────────────────
+
+    /** Stage a slot type flip; nothing is persisted until confirmTypeChanges(). */
+    public function toggleSlotType(int $slotId): void
+    {
+        // Tapping a pending chip again reverts the staged change.
+        if (array_key_exists($slotId, $this->pendingTypeChanges)) {
+            unset($this->pendingTypeChanges[$slotId]);
+
+            return;
+        }
+
+        $slot = ParkingSlot::findOrFail($slotId);
+
+        $this->pendingTypeChanges[$slotId] = $slot->vehicle_type === ParkingLot::VEHICLE_TWO_WHEELER
+            ? ParkingLot::VEHICLE_FOUR_WHEELER
+            : ParkingLot::VEHICLE_TWO_WHEELER;
+    }
+
+    /** Persist all staged slot type changes. */
+    public function confirmTypeChanges(): void
+    {
+        if ($this->pendingTypeChanges === []) {
+            return;
+        }
+
+        foreach ($this->pendingTypeChanges as $slotId => $type) {
+            ParkingSlot::where('id', $slotId)->update(['vehicle_type' => $type]);
+        }
+
+        $this->pendingTypeChanges = [];
+        $this->dispatch('floor-saved');
+    }
+
+    public function discardTypeChanges(): void
+    {
+        $this->pendingTypeChanges = [];
     }
 
     // ── Add floor ─────────────────────────────────────────────────────────────
