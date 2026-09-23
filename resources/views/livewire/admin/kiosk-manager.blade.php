@@ -1,4 +1,4 @@
-<div class="relative min-h-screen w-full overflow-hidden bg-[#070312] text-white flex flex-col">
+<div class="relative min-h-[100dvh_-_4rem] w-full overflow-hidden bg-[#070312] text-white flex flex-col">
 
     {{-- Background gradient & orbs --}}
     <div class="kiosk-bg absolute inset-0"></div>
@@ -11,23 +11,16 @@
 
         {{-- Page header --}}
         <header class="flex items-center justify-between gap-4 mb-8">
-            <div class="flex items-center gap-3">
-                <a href="{{ route('home') }}"
-                   class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-lg text-white/70 transition hover:bg-white/20 hover:text-white"
-                   title="Go to home screen" aria-label="Go to home screen">
-                    <i class="fas fa-house"></i>
-                </a>
-                <div>
-                    <h1 class="text-3xl font-black uppercase tracking-widest">
-                        <span class="text-sky-400">Admin</span> — Kiosks
-                    </h1>
-                    <p class="mt-1 text-sm text-white/60">Attach each RFID kiosk to a parking lot</p>
-                </div>
+            <div>
+                <h1 class="text-3xl font-black uppercase tracking-widest">
+                    <span class="text-sky-400">Setup</span> — Kiosks
+                </h1>
+                <x-setup-steps current="kiosks" />
             </div>
-            <a href="{{ route('admin.lots') }}"
-               class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                <i class="fas fa-building"></i> Parking Lots
-            </a>
+            <p class="hidden max-w-xs text-right text-xs text-white/50 sm:block">
+                <i class="fas fa-circle-info mr-1 text-sky-400"></i>
+                Step 3 of 3 — attach each RFID kiosk to the parking lot it guards.
+            </p>
         </header>
 
         {{-- Add kiosk form --}}

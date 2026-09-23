@@ -6,13 +6,17 @@ use App\Models\ParkingFloor;
 use App\Models\ParkingLot;
 use Illuminate\View\View;
 use Livewire\Attributes\Rule;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class FloorManager extends Component
 {
     // ── Add-floor form ────────────────────────────────────────────────────────
 
+    // Also scopes the page when visiting /admin/floors?lot=<id> (e.g. from the
+    // "Floors & Slots" button on a lot), so the list stays focused on one lot.
     #[Rule('required|exists:parking_lots,id')]
+    #[Url(as: 'lot')]
     public ?int $lotId = null;
 
     #[Rule('required|string|max:100')]
@@ -40,12 +44,18 @@ class FloorManager extends Component
 
     public function render(): View
     {
+        $lots = ParkingLot::orderBy('lot_number')->get();
+
         return view('livewire.admin.floor-manager', [
-            'lots' => ParkingLot::orderBy('lot_number')->get(),
+            'lots' => $lots,
+            'selectedLot' => $lots->firstWhere('id', $this->lotId),
             'floors' => ParkingFloor::with('lot')->withCount([
                 'slots',
                 'slots as occupied_slots_count' => fn ($q) => $q->where('is_occupied', true),
-            ])->orderBy('floor_number')->get(),
+            ])
+                ->when($this->lotId, fn ($q) => $q->where('parking_lot_id', $this->lotId))
+                ->orderBy('floor_number')
+                ->get(),
         ])->layout('components.layouts.app', ['title' => 'Admin – Floors | ParkEasy']);
     }
 
@@ -72,7 +82,9 @@ class FloorManager extends Component
 
         $floor->syncSlots();
 
-        $this->reset(['lotId', 'name', 'slotCount']);
+        // Keep the chosen lot selected so the attendant can keep adding floors
+        // to the same lot (and the ?lot= scope stays intact).
+        $this->reset(['name', 'slotCount']);
         $this->dispatch('floor-saved');
     }
 

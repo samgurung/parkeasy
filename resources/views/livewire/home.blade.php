@@ -1,4 +1,4 @@
-<div class="relative min-h-screen w-full overflow-hidden bg-[#070312] text-white flex flex-col" data-kiosk-root>
+<div class="relative min-h-[100dvh_-_4rem] w-full overflow-hidden bg-[#070312] text-white flex flex-col" data-kiosk-root>
 
     <div class="kiosk-bg absolute inset-0"></div>
     <div
@@ -27,61 +27,13 @@
                 </div>
             </div>
             <div class="flex items-center gap-4">
-                <nav class="hidden items-stretch gap-2 lg:flex">
-                    <a href="{{ route('lots.overview') }}"
-                        class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                        <i class="fas fa-chart-line"></i> Lot Report
-                    </a>
-                    <a href="{{ route('slots.dashboard') }}"
-                        class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                        <i class="fas fa-map-location-dot"></i> Slot Monitor
-                    </a>
-                    <a href="{{ route('admin.lots') }}"
-                        class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                        <i class="fas fa-building"></i> Parking Lots
-                    </a>
-                    <a href="{{ route('admin.kiosks') }}"
-                        class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                        <i class="fas fa-id-card"></i> Kiosks
-                    </a>
-                    <a href="{{ route('admin.floors') }}"
-                        class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                        <i class="fas fa-gear"></i> Configure
-                    </a>
-                </nav>
                 <div class="text-right hidden lg:block">
                     <div id="kiosk-clock" class="text-xl font-bold tabular-nums drop-shadow"></div>
                     <div id="kiosk-date" class="text-xs text-white/60"></div>
                 </div>
-                <button id="menu-toggle" type="button" aria-label="Toggle menu" aria-expanded="false"
-                    class="flex h-11 w-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-lg text-white/80 transition hover:bg-white/20 lg:hidden">
-                    <i id="menu-icon" class="fas fa-bars"></i>
-                </button>
             </div>
         </header>
 
-        <div id="mobile-menu" class="mt-3 hidden flex-col gap-2 lg:hidden">
-            <a href="{{ route('lots.overview') }}"
-                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                <i class="fas fa-chart-line"></i> Lot Report
-            </a>
-            <a href="{{ route('slots.dashboard') }}"
-                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                <i class="fas fa-map-location-dot"></i> Slot Monitor
-            </a>
-            <a href="{{ route('admin.lots') }}"
-                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                <i class="fas fa-building"></i> Parking Lots
-            </a>
-            <a href="{{ route('admin.kiosks') }}"
-                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                <i class="fas fa-id-card"></i> Kiosks
-            </a>
-            <a href="{{ route('admin.floors') }}"
-                class="flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                <i class="fas fa-gear"></i> Configure
-            </a>
-        </div>
         <div class="mt-3 flex items-center justify-between gap-4 lg:hidden">
             <div id="kiosk-clock-mobile" class="text-lg font-bold tabular-nums drop-shadow"></div>
             <div id="kiosk-date-mobile" class="text-xs text-white/60"></div>
@@ -744,18 +696,6 @@
 
             entryBtn.addEventListener('click', () => setArmed('entry'));
             exitBtn.addEventListener('click', () => setArmed('exit'));
-
-            const menuToggle = document.getElementById('menu-toggle');
-            const mobileMenu = document.getElementById('mobile-menu');
-            const menuIcon = document.getElementById('menu-icon');
-
-            menuToggle.addEventListener('click', () => {
-                const isHidden = mobileMenu.classList.toggle('hidden');
-                mobileMenu.classList.toggle('flex', !isHidden);
-                menuToggle.setAttribute('aria-expanded', String(!isHidden));
-                menuIcon.classList.toggle('fa-bars', isHidden);
-                menuIcon.classList.toggle('fa-xmark', !isHidden);
-            });
 
             // Clicking the background (anything that isn't a control) un-arms
             // the selected direction so an accidental tap doesn't arm the kiosk.

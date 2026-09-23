@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Admin\FloorManager;
+use App\Livewire\LotOverview;
+use App\Livewire\SlotDashboard;
 use App\Models\ParkingFloor;
 use App\Models\ParkingLot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class ParkingSlotsPageTest extends TestCase
@@ -31,10 +35,10 @@ class ParkingSlotsPageTest extends TestCase
     private function makeFloor(int $floorNumber = 0, int $slotCount = 4): ParkingFloor
     {
         $floor = ParkingFloor::create([
-            'name'           => "Floor {$floorNumber}",
+            'name' => "Floor {$floorNumber}",
             'parking_lot_id' => $this->lot()->id,
-            'floor_number'   => $floorNumber,
-            'slot_count'     => $slotCount,
+            'floor_number' => $floorNumber,
+            'slot_count' => $slotCount,
         ]);
 
         $floor->syncSlots();
@@ -89,6 +93,75 @@ class ParkingSlotsPageTest extends TestCase
             ->assertSee('Floor 0');
     }
 
+    public function test_admin_floors_page_scopes_floors_to_a_lot(): void
+    {
+        $this->makeFloor(0, 2); // Main Lot floor, should be hidden when scoped.
+
+        $otherLot = ParkingLot::create([
+            'name' => 'Tower Lot',
+            'lot_number' => 3610,
+        ]);
+
+        $otherFloor = ParkingFloor::create([
+            'name' => 'Tower Floor',
+            'parking_lot_id' => $otherLot->id,
+            'floor_number' => 0,
+            'slot_count' => 3,
+        ]);
+        $otherFloor->syncSlots();
+
+        $this->get('/admin/floors?lot='.$otherLot->id)
+            ->assertOk()
+            ->assertSee('Tower Floor')
+            ->assertSee("Lot #{$otherLot->lot_number}")
+            ->assertDontSee('Floor 0');
+    }
+
+    public function test_admin_floors_page_lists_all_when_not_scoped(): void
+    {
+        $this->makeFloor(0, 2);
+
+        $otherLot = ParkingLot::create([
+            'name' => 'Tower Lot',
+            'lot_number' => 3611,
+        ]);
+
+        ParkingFloor::create([
+            'name' => 'Tower Floor',
+            'parking_lot_id' => $otherLot->id,
+            'floor_number' => 0,
+            'slot_count' => 3,
+        ])->syncSlots();
+
+        $this->get('/admin/floors')
+            ->assertOk()
+            ->assertSee('Floor 0')
+            ->assertSee('Tower Floor');
+    }
+
+    public function test_lot_manager_links_each_lot_to_its_floors(): void
+    {
+        $this->makeFloor(0, 2);
+
+        $this->get('/admin/lots')
+            ->assertOk()
+            ->assertSee('Floors & Slots')
+            ->assertSee(route('admin.floors', ['lot' => $this->lot()->id]));
+    }
+
+    public function test_floor_manager_keeps_lot_selected_after_adding_a_floor(): void
+    {
+        $lot = $this->lot();
+
+        Livewire::test(FloorManager::class)
+            ->set('lotId', $lot->id)
+            ->set('name', 'New Floor')
+            ->set('slotCount', '4')
+            ->call('addFloor')
+            ->assertSet('lotId', $lot->id)
+            ->assertHasNoErrors();
+    }
+
     public function test_slot_monitor_lists_lots_and_defaults_to_first_lot(): void
     {
         $this->makeFloor(0, 2);
@@ -104,15 +177,15 @@ class ParkingSlotsPageTest extends TestCase
         $this->makeFloor(0, 2);
 
         $otherLot = ParkingLot::create([
-            'name'       => 'Other Lot',
+            'name' => 'Other Lot',
             'lot_number' => 3606,
         ]);
 
         $otherFloor = ParkingFloor::create([
-            'name'           => 'Other Floor',
+            'name' => 'Other Floor',
             'parking_lot_id' => $otherLot->id,
-            'floor_number'   => 0,
-            'slot_count'     => 3,
+            'floor_number' => 0,
+            'slot_count' => 3,
         ]);
 
         $otherFloor->syncSlots();
@@ -125,7 +198,7 @@ class ParkingSlotsPageTest extends TestCase
             ->assertSee('#1 — Main Lot');
 
         // Selecting the other lot shows only its floors.
-        \Livewire\Livewire::test(\App\Livewire\SlotDashboard::class)
+        Livewire::test(SlotDashboard::class)
             ->set('lotId', $otherLot->id)
             ->call('refresh')
             ->assertSet('lotId', $otherLot->id)
@@ -139,16 +212,16 @@ class ParkingSlotsPageTest extends TestCase
     {
         $this->makeFloor(0, 3);
         $otherLot = ParkingLot::create([
-            'name'       => 'Downtown Lot',
+            'name' => 'Downtown Lot',
             'lot_number' => 3607,
-            'address'    => '12 Market Street',
+            'address' => '12 Market Street',
         ]);
 
         $otherFloor = ParkingFloor::create([
-            'name'           => 'Downtown Floor',
+            'name' => 'Downtown Floor',
             'parking_lot_id' => $otherLot->id,
-            'floor_number'   => 0,
-            'slot_count'     => 6,
+            'floor_number' => 0,
+            'slot_count' => 6,
         ]);
         $otherFloor->syncSlots();
         $otherFloor->slots()->where('slot_number', 1)->update(['is_occupied' => true]);
@@ -169,12 +242,12 @@ class ParkingSlotsPageTest extends TestCase
 
         // Unconfigured lot with no floors/slots.
         ParkingLot::create([
-            'name'       => 'Empty Lot',
+            'name' => 'Empty Lot',
             'lot_number' => 3609,
-            'address'    => '1 Nowhere Lane',
+            'address' => '1 Nowhere Lane',
         ]);
 
-        \Livewire\Livewire::test(\App\Livewire\LotOverview::class)
+        Livewire::test(LotOverview::class)
             ->assertOk()
             ->assertSee('Main Lot')
             ->assertDontSee('Empty Lot')
@@ -184,25 +257,25 @@ class ParkingSlotsPageTest extends TestCase
     public function test_lot_report_searches_by_address(): void
     {
         $plazaLot = ParkingLot::create([
-            'name'       => 'Plaza Lot',
+            'name' => 'Plaza Lot',
             'lot_number' => 3607,
-            'address'    => '99 Pine Avenue',
+            'address' => '99 Pine Avenue',
         ]);
         $plazaFloor = ParkingFloor::create([
-            'name'           => 'Plaza Floor',
+            'name' => 'Plaza Floor',
             'parking_lot_id' => $plazaLot->id,
-            'floor_number'   => 0,
-            'slot_count'     => 2,
+            'floor_number' => 0,
+            'slot_count' => 2,
         ]);
         $plazaFloor->syncSlots();
         $this->makeFloor(0, 2); // Main Lot, no address
 
-        \Livewire\Livewire::test(\App\Livewire\LotOverview::class)
+        Livewire::test(LotOverview::class)
             ->set('search', 'Pine Avenue')
             ->assertSee('Plaza Lot')
             ->assertViewHas('lots', fn ($lots) => $lots->count() === 1 && $lots->first()->name === 'Plaza Lot');
 
-        \Livewire\Livewire::test(\App\Livewire\LotOverview::class)
+        Livewire::test(LotOverview::class)
             ->set('search', 'zzz-no-match')
             ->assertSee('No parking lots match your search')
             ->assertViewHas('lots', fn ($lots) => $lots->isEmpty());
@@ -215,20 +288,20 @@ class ParkingSlotsPageTest extends TestCase
 
         // Busy Lot: 4 slots, 3 occupied → 1 free.
         $busyLot = ParkingLot::create([
-            'name'       => 'Busy Lot',
+            'name' => 'Busy Lot',
             'lot_number' => 3608,
         ]);
 
         $busyFloor = ParkingFloor::create([
-            'name'           => 'Busy Floor',
+            'name' => 'Busy Floor',
             'parking_lot_id' => $busyLot->id,
-            'floor_number'   => 0,
-            'slot_count'     => 4,
+            'floor_number' => 0,
+            'slot_count' => 4,
         ]);
         $busyFloor->syncSlots();
         $busyFloor->slots()->whereIn('slot_number', [1, 2, 3])->update(['is_occupied' => true]);
 
-        \Livewire\Livewire::test(\App\Livewire\LotOverview::class)
+        Livewire::test(LotOverview::class)
             ->assertViewHas('lots', function ($lots) {
                 return $lots->first()->free_slots === 2
                     && $lots->first()->name === 'Main Lot'

@@ -1,4 +1,4 @@
-<div class="relative min-h-screen w-full overflow-hidden bg-[#070312] text-white flex flex-col" data-kiosk-root>
+<div class="relative min-h-[100dvh_-_4rem] w-full overflow-hidden bg-[#070312] text-white flex flex-col" data-kiosk-root>
 
     <div class="kiosk-bg absolute inset-0"></div>
     <div class="kiosk-orb pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-teal-400 opacity-30 blur-[100px]"></div>
@@ -10,18 +10,11 @@
 
         {{-- Page header --}}
         <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex items-center gap-3">
-                <a href="{{ route('home') }}"
-                   class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-lg text-white/70 transition hover:bg-white/20 hover:text-white"
-                   title="Go to home screen" aria-label="Go to home screen">
-                    <i class="fas fa-house"></i>
-                </a>
-                <div>
-                    <h1 class="text-3xl font-black uppercase tracking-widest">
-                        <span class="text-teal-400">Slot</span> Monitor
-                    </h1>
-                    <p class="mt-1 text-sm text-white/60">Live parking occupancy from IR slot sensors</p>
-                </div>
+            <div>
+                <h1 class="text-3xl font-black uppercase tracking-widest">
+                    <span class="text-teal-400">Slot</span> Monitor
+                </h1>
+                <p class="mt-1 text-sm text-white/60">Live parking occupancy from IR slot sensors</p>
             </div>
             <div class="flex flex-wrap items-center gap-3">
                 <span id="live-chip"
@@ -43,10 +36,12 @@
                         @endforelse
                     </select>
                 </label>
-                <a href="{{ route('admin.floors') }}"
-                   class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                    <i class="fas fa-gear"></i> Configure
-                </a>
+                @if ($lotId)
+                    <a href="{{ route('admin.floors', ['lot' => $lotId]) }}"
+                       class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
+                        <i class="fas fa-gear"></i> Configure Floors
+                    </a>
+                @endif
                 <button wire:click="refresh"
                         class="flex items-center gap-2 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 px-4 py-2 text-sm font-black uppercase tracking-widest text-white shadow hover:brightness-110 transition">
                     <i class="fas fa-rotate"></i> Refresh

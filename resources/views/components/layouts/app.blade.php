@@ -6,12 +6,8 @@
     <title>{{ $title ?? 'ParkEasy' }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body>
-    <nav>
-        <ul>
-            <!-- <li><a href="/">Home</a></li> -->
-        </ul>
-    </nav>
-        {{ $slot }}
+<body class="bg-[#070312] text-white antialiased">
+    <x-site-nav />
+    {{ $slot }}
 </body>
 </html>

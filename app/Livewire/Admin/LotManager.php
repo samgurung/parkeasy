@@ -40,10 +40,10 @@ class LotManager extends Component
         $this->validate();
 
         ParkingLot::create([
-            'name'              => $this->name,
-            'lot_number'        => ParkingLot::nextLotNumber(),
-            'address'           => $this->address ?: null,
-            'rate_two_wheeler'  => $this->rateTwoWheeler,
+            'name' => $this->name,
+            'lot_number' => ParkingLot::nextLotNumber(),
+            'address' => $this->address ?: null,
+            'rate_two_wheeler' => $this->rateTwoWheeler,
             'rate_four_wheeler' => $this->rateFourWheeler,
         ]);
 
@@ -54,9 +54,9 @@ class LotManager extends Component
     {
         $lot = ParkingLot::findOrFail($id);
 
-        $this->editingId          = $lot->id;
-        $this->editName           = $lot->name;
-        $this->editAddress        = (string) $lot->address;
+        $this->editingId = $lot->id;
+        $this->editName = $lot->name;
+        $this->editAddress = (string) $lot->address;
         $this->editRateTwoWheeler = (string) $lot->rate_two_wheeler;
         $this->editRateFourWheeler = (string) $lot->rate_four_wheeler;
     }
@@ -64,16 +64,16 @@ class LotManager extends Component
     public function save(): void
     {
         $this->validate([
-            'editName'             => ['required', 'string', 'max:255'],
-            'editAddress'          => ['nullable', 'string', 'max:255'],
-            'editRateTwoWheeler'   => ['required', 'numeric', 'min:0'],
-            'editRateFourWheeler'  => ['required', 'numeric', 'min:0'],
+            'editName' => ['required', 'string', 'max:255'],
+            'editAddress' => ['nullable', 'string', 'max:255'],
+            'editRateTwoWheeler' => ['required', 'numeric', 'min:0'],
+            'editRateFourWheeler' => ['required', 'numeric', 'min:0'],
         ]);
 
         ParkingLot::whereKey($this->editingId)->update([
-            'name'              => $this->editName,
-            'address'           => $this->editAddress ?: null,
-            'rate_two_wheeler'  => $this->editRateTwoWheeler,
+            'name' => $this->editName,
+            'address' => $this->editAddress ?: null,
+            'rate_two_wheeler' => $this->editRateTwoWheeler,
             'rate_four_wheeler' => $this->editRateFourWheeler,
         ]);
 
@@ -108,7 +108,7 @@ class LotManager extends Component
     public function render()
     {
         return view('livewire.admin.lot-manager', [
-            'lots' => ParkingLot::withCount('floors')->orderBy('lot_number')->get(),
-        ]);
+            'lots' => ParkingLot::withCount('floors', 'slots')->orderBy('lot_number')->get(),
+        ])->layout('components.layouts.app', ['title' => 'Parking Lots | ParkEasy']);
     }
 }

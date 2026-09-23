@@ -1,4 +1,4 @@
-<div class="relative min-h-screen w-full overflow-hidden bg-[#070312] text-white flex flex-col">
+<div class="relative min-h-[100dvh_-_4rem] w-full overflow-hidden bg-[#070312] text-white flex flex-col">
 
     {{-- Background gradient & orbs --}}
     <div class="kiosk-bg absolute inset-0"></div>
@@ -11,23 +11,16 @@
 
         {{-- Page header --}}
         <header class="flex items-center justify-between gap-4 mb-8">
-            <div class="flex items-center gap-3">
-                <a href="{{ route('home') }}"
-                   class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-lg text-white/70 transition hover:bg-white/20 hover:text-white"
-                   title="Go to home screen" aria-label="Go to home screen">
-                    <i class="fas fa-house"></i>
-                </a>
-                <div>
-                    <h1 class="text-3xl font-black uppercase tracking-widest">
-                        <span class="text-sky-400">Admin</span> — Parking Lots
-                    </h1>
-                    <p class="mt-1 text-sm text-white/60">Configure parking lots</p>
-                </div>
+            <div>
+                <h1 class="text-3xl font-black uppercase tracking-widest">
+                    <span class="text-sky-400">Setup</span> — Parking Lots
+                </h1>
+                <x-setup-steps current="lots" />
             </div>
-            <a href="{{ route('slots.dashboard') }}"
-               class="flex items-center gap-2 rounded-xl bg-white/10 border border-white/20 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                <i class="fas fa-map-location-dot"></i> Live Dashboard
-            </a>
+            <p class="hidden max-w-xs text-right text-xs text-white/50 sm:block">
+                <i class="fas fa-circle-info mr-1 text-sky-400"></i>
+                Step 1 of 3 — register each parking lot, then give it floors and slots.
+            </p>
         </header>
 
         {{-- Add lot form --}}
@@ -131,8 +124,9 @@
                                 <div>
                                     <div class="text-lg font-bold">{{ $lot->name }}</div>
                                     <div class="text-xs text-white/50">
+                                        <span class="text-teal-300">PARKING LOT #{{ $lot->lot_number }}</span> &bull;
                                         {{ $lot->floors_count }} floor{{ $lot->floors_count === 1 ? '' : 's' }} &bull;
-                                        <span class="text-teal-300">PARKING LOT #{{ $lot->lot_number }}</span>
+                                        {{ $lot->slots_count }} slot{{ $lot->slots_count === 1 ? '' : 's' }}
                                         @if ($lot->address)
                                             &bull; {{ $lot->address }}
                                         @endif
@@ -143,7 +137,12 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="flex gap-3">
+                            <div class="flex flex-wrap gap-3">
+                                <a href="{{ route('admin.floors', ['lot' => $lot->id]) }}"
+                                   class="rounded-xl border border-teal-400/40 bg-teal-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-teal-300 hover:bg-teal-500/20 transition"
+                                   title="Configure this lot's floors and slots">
+                                    <i class="fas fa-layer-group mr-1"></i> Floors &amp; Slots
+                                </a>
                                 <button wire:click="edit({{ $lot->id }})"
                                         class="rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-sky-300 hover:bg-sky-500/20 transition">
                                     <i class="fas fa-pen mr-1"></i> Edit

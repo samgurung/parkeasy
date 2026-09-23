@@ -1,4 +1,4 @@
-<div class="relative min-h-screen w-full overflow-hidden bg-[#070312] text-white flex flex-col" wire:poll.10s>
+<div class="relative min-h-[100dvh_-_4rem] w-full overflow-hidden bg-[#070312] text-white flex flex-col" wire:poll.10s>
 
     {{-- Background gradient & orbs --}}
     <div class="kiosk-bg absolute inset-0"></div>
@@ -12,24 +12,13 @@
         {{-- Header --}}
         <header class="flex flex-col gap-5 mb-8">
             <div class="flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <a href="{{ route('home') }}"
-                       class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-lg text-white/70 transition hover:bg-white/20 hover:text-white"
-                       title="Go to home screen" aria-label="Go to home screen">
-                        <i class="fas fa-house"></i>
-                    </a>
-                    <div>
-                        <h1 class="text-3xl font-black uppercase tracking-widest">
-                            <span class="text-teal-400">Live</span> Parking Lot Report
-                        </h1>
-                        <p class="mt-1 text-sm text-white/60">Real-time occupancy across all parking lots — pick the one with room near you.</p>
-                    </div>
+                <div>
+                    <h1 class="text-3xl font-black uppercase tracking-widest">
+                        <span class="text-teal-400">Live</span> Parking Lot Report
+                    </h1>
+                    <p class="mt-1 text-sm text-white/60">Real-time occupancy across all parking lots — pick the one with room near you.</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
-                    <a href="{{ route('slots.dashboard') }}"
-                       class="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
-                        <i class="fas fa-tower-observation"></i> Slot Monitor
-                    </a>
                     <button wire:click="refresh"
                             class="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/20 transition">
                         <i class="fas fa-rotate"></i> Refresh
