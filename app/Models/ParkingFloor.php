@@ -19,8 +19,8 @@ class ParkingFloor extends Model
     ];
 
     protected $casts = [
-        'floor_number'   => 'integer',
-        'slot_count'     => 'integer',
+        'floor_number' => 'integer',
+        'slot_count' => 'integer',
         'parking_lot_id' => 'integer',
     ];
 
@@ -37,10 +37,13 @@ class ParkingFloor extends Model
     public function syncSlots(): void
     {
         $existing = $this->slots()->pluck('slot_number')->all();
-        $desired  = range(1, $this->slot_count);
+        $desired = range(1, $this->slot_count);
 
         foreach (array_diff($desired, $existing) as $num) {
-            $this->slots()->create(['slot_number' => $num]);
+            $this->slots()->create([
+                'slot_number' => $num,
+                'vehicle_type' => ParkingLot::VEHICLE_FOUR_WHEELER,
+            ]);
         }
     }
 }

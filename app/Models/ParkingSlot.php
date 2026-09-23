@@ -15,12 +15,13 @@ class ParkingSlot extends Model
         'slot_number',
         'label',
         'is_occupied',
+        'vehicle_type',
         'last_updated_at',
     ];
 
     protected $casts = [
-        'slot_number'     => 'integer',
-        'is_occupied'     => 'boolean',
+        'slot_number' => 'integer',
+        'is_occupied' => 'boolean',
         'last_updated_at' => 'datetime',
     ];
 
