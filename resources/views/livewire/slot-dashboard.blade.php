@@ -157,12 +157,17 @@
                                  data-floor="{{ $floor->floor_number }}"
                                  data-lot="{{ $floor->lot->lot_number }}"
                                  data-slot="{{ $slot->slot_number }}"
+                                 data-type="{{ $slot->vehicle_type }}"
                                  data-occupied="{{ $occupied ? 1 : 0 }}"
                                  data-updated="{{ $slot->last_updated_at?->toIso8601String() }}"
                                  data-occ="{{ $occClass }}"
                                  data-free="{{ $freeClass }}"
                                  class="{{ $occupied ? $occClass : $freeClass }}"
                                  title="Floor {{ $floor->floor_number }} · Slot {{ $slot->slot_number }}">
+                                <span data-slot-type
+                                      class="rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest {{ $slot->vehicle_type === 'two_wheeler' ? 'border-sky-400/40 bg-sky-500/10 text-sky-300' : 'border-teal-400/40 bg-teal-500/10 text-teal-300' }}">
+                                    {{ $slot->vehicle_type === 'two_wheeler' ? '2W' : '4W' }}
+                                </span>
                                 <span class="text-[10px] font-bold uppercase tracking-widest text-white/50">
                                     Place {{ $slot->displayLabel() }}
                                 </span>
