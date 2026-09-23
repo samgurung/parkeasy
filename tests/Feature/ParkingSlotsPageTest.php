@@ -162,6 +162,174 @@ class ParkingSlotsPageTest extends TestCase
             ->assertHasNoErrors();
     }
 
+    public function test_floor_manager_stages_toggle_without_persisting(): void
+    {
+        $floor = $this->makeFloor(0, 6);
+        $slot = $floor->slots()->where('slot_number', 4)->firstOrFail();
+
+        Livewire::test(FloorManager::class)
+            ->call('toggleSlotType', $slot->id)
+            ->assertSet('pendingTypeChanges.'.$slot->id, 'two_wheeler');
+
+        // Nothing persisted until the confirm bar is used.
+        $this->assertDatabaseHas('parking_slots', [
+            'id' => $slot->id,
+            'vehicle_type' => 'four_wheeler',
+        ]);
+    }
+
+    public function test_floor_manager_confirm_applies_staged_type_changes(): void
+    {
+        $floor = $this->makeFloor(0, 6);
+
+        // Designate a mid-row and an end slot as two-wheelers, not the first ones.
+        $slot3 = $floor->slots()->where('slot_number', 3)->firstOrFail();
+        $slot6 = $floor->slots()->where('slot_number', 6)->firstOrFail();
+
+        Livewire::test(FloorManager::class)
+            ->call('toggleSlotType', $slot3->id)
+            ->call('toggleSlotType', $slot6->id)
+            ->call('confirmTypeChanges')
+            ->assertSet('pendingTypeChanges', []);
+
+        $this->assertSame([3, 6], $floor->slots()
+            ->where('vehicle_type', 'two_wheeler')
+            ->orderBy('slot_number')
+            ->pluck('slot_number')
+            ->all());
+        $this->assertSame(4, $floor->slots()->where('vehicle_type', 'four_wheeler')->count());
+    }
+
+    public function test_floor_manager_second_tap_undoes_pending_change(): void
+    {
+        $floor = $this->makeFloor(0, 4);
+        $slot = $floor->slots()->where('slot_number', 2)->firstOrFail();
+
+        Livewire::test(FloorManager::class)
+            ->call('toggleSlotType', $slot->id)
+            ->call('toggleSlotType', $slot->id)
+            ->assertSet('pendingTypeChanges', [])
+            ->call('confirmTypeChanges');
+
+        $this->assertDatabaseHas('parking_slots', [
+            'id' => $slot->id,
+            'vehicle_type' => 'four_wheeler',
+        ]);
+    }
+
+    public function test_floor_manager_discard_drops_staged_changes(): void
+    {
+        $floor = $this->makeFloor(0, 4);
+        $slot = $floor->slots()->where('slot_number', 1)->firstOrFail();
+
+        Livewire::test(FloorManager::class)
+            ->call('toggleSlotType', $slot->id)
+            ->call('discardTypeChanges')
+            ->assertSet('pendingTypeChanges', []);
+
+        $this->assertDatabaseHas('parking_slots', [
+            'id' => $slot->id,
+            'vehicle_type' => 'four_wheeler',
+        ]);
+    }
+
+    public function test_section_filter_scopes_floors_to_a_lot(): void
+    {
+        $this->makeFloor(0, 2); // Main Lot floor
+
+        $otherLot = ParkingLot::create([
+            'name' => 'Tower Lot',
+            'lot_number' => 3610,
+        ]);
+        ParkingFloor::create([
+            'name' => 'Tower Floor',
+            'parking_lot_id' => $otherLot->id,
+            'floor_number' => 0,
+            'slot_count' => 3,
+        ])->syncSlots();
+
+        Livewire::test(FloorManager::class)
+            ->set('filterLotId', $otherLot->id)
+            ->assertSee('Tower Floor')
+            ->assertDontSee('Floor 0')
+            ->set('filterLotId', null)
+            ->assertSee('Floor 0')
+            ->assertSee('Tower Floor');
+    }
+
+    public function test_section_filter_and_add_form_lot_selection_are_independent(): void
+    {
+        $this->makeFloor(0, 2);
+
+        $otherLot = ParkingLot::create([
+            'name' => 'Tower Lot',
+            'lot_number' => 3612,
+        ]);
+        ParkingFloor::create([
+            'name' => 'Tower Floor',
+            'parking_lot_id' => $otherLot->id,
+            'floor_number' => 0,
+            'slot_count' => 3,
+        ])->syncSlots();
+
+        // Filtering to one lot does not touch the add-floor form's selection.
+        Livewire::test(FloorManager::class)
+            ->set('filterLotId', $otherLot->id)
+            ->assertSet('lotId', null)
+            ->assertSee('Tower Floor')
+            ->assertDontSee('Floor 0');
+
+        // Picking a lot in the add form does not change the floors list filter.
+        Livewire::test(FloorManager::class)
+            ->set('lotId', $otherLot->id)
+            ->assertSet('filterLotId', null)
+            ->assertSee('Floor 0')
+            ->assertSee('Tower Floor');
+    }
+
+    public function test_section_filter_select_uses_live_binding(): void
+    {
+        // Livewire 4: bare "wire:model" / ".change" only sync client state and the
+        // URL for #[Url] properties without sending a network request. The filter
+        // relies on ".live" to actually re-render the floors list.
+        $this->get('/admin/floors')
+            ->assertSee('wire:model.live.change="filterLotId"', false);
+    }
+
+    public function test_lot_report_counts_per_type_occupancy_from_slot_designation(): void
+    {
+        $floor = $this->makeFloor(0, 4);
+        // Designate slot 2 (mid-row) as two-wheeler; occupy it and a four-wheeler.
+        $floor->slots()->where('slot_number', 2)->update(['vehicle_type' => 'two_wheeler']);
+        $floor->slots()->where('slot_number', 2)->update(['is_occupied' => true]);
+        $floor->slots()->where('slot_number', 3)->update(['is_occupied' => true]);
+
+        Livewire::test(LotOverview::class)
+            ->assertViewHas('lots', function ($lots) {
+                $this->assertSame(1, $lots->first()->two_wheeler_slots_count);
+                $this->assertSame(1, $lots->first()->occupied_two_wheeler_slots_count);
+                $this->assertSame(3, $lots->first()->four_wheeler_slots_count);
+                $this->assertSame(1, $lots->first()->occupied_four_wheeler_slots_count);
+
+                return true;
+            })
+            ->assertSee('2-Wheeler')
+            ->assertSee('4-Wheeler');
+    }
+
+    public function test_lot_report_defaults_all_slots_to_four_wheeler_without_designation(): void
+    {
+        $this->makeFloor(0, 3);
+
+        Livewire::test(LotOverview::class)
+            ->assertViewHas('lots', function ($lots) {
+                $this->assertSame(0, $lots->first()->two_wheeler_slots_count);
+                $this->assertSame(3, $lots->first()->four_wheeler_slots_count);
+
+                return true;
+            });
+    }
+
     public function test_slot_monitor_lists_lots_and_defaults_to_first_lot(): void
     {
         $this->makeFloor(0, 2);
