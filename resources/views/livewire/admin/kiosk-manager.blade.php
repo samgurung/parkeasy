@@ -1,4 +1,4 @@
-<div class="relative min-h-[100dvh_-_4rem] w-full overflow-hidden bg-[#070312] text-white flex flex-col">
+<div class="relative min-h-[calc(100dvh_-_4rem)] w-full overflow-hidden bg-[#070312] text-white flex flex-col">
 
     {{-- Background gradient & orbs --}}
     <div class="kiosk-bg absolute inset-0"></div>

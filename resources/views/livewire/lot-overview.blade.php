@@ -1,4 +1,4 @@
-<div class="relative min-h-[100dvh_-_4rem] w-full overflow-hidden bg-[#070312] text-white flex flex-col" wire:poll.10s>
+<div class="relative min-h-[calc(100dvh_-_4rem)] w-full overflow-hidden bg-[#070312] text-white flex flex-col" wire:poll.10s>
 
     {{-- Background gradient & orbs --}}
     <div class="kiosk-bg absolute inset-0"></div>
@@ -67,13 +67,7 @@
                     'border-teal-400/40' => $loop->first && count($lots) > 1,
                     'border-white/15' => !($loop->first && count($lots) > 1),
                 ])>
-                    @if ($loop->first && count($lots) > 1)
-                        <span class="absolute right-0 top-4 rounded-l-full bg-gradient-to-br from-teal-400 to-emerald-500 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-black shadow">
-                            Best Pick
-                        </span>
-                    @endif
-
-                    {{-- Status pill --}}
+                    {{-- Status + best-pick pills --}}
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <h2 class="text-lg font-black uppercase tracking-wider">{{ $lot->name }}</h2>
@@ -82,6 +76,12 @@
                                 @if ($lot->address) · {{ $lot->address }} @endif
                             </p>
                         </div>
+                        <div class="flex shrink-0 flex-col items-end gap-2">
+                            @if ($loop->first && count($lots) > 1)
+                                <span class="rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-black shadow">
+                                    Best Pick
+                                </span>
+                            @endif
                         <span @class([
                             'rounded-full px-3 py-1 text-xs font-black uppercase tracking-widest',
                             'border border-emerald-400/40 bg-emerald-500/10 text-emerald-300' => $lot->free_slots > 0,
@@ -94,54 +94,49 @@
                             ])></i>
                             {{ $lot->free_slots > 0 ? 'Open' : 'Full' }}
                         </span>
+                        </div>
                     </div>
 
-                    {{-- Occupancy bar --}}
+                    {{-- Free-slot bar --}}
                     <div class="mt-5 h-3 w-full overflow-hidden rounded-full bg-black/40">
                         <div class="h-full rounded-full transition-all"
-                             style="width: {{ $lot->occupancy_pct }}%; background: linear-gradient(90deg, #5eead4, #22d3ee);"></div>
+                             style="width: {{ 100 - $lot->occupancy_pct }}%; background: linear-gradient(90deg, #5eead4, #22d3ee);"></div>
                     </div>
                     <p class="mt-2 text-right text-xs font-black text-white/70">
-                        {{ $lot->occupied_slots_count }}/{{ $lot->total_slots }} used · {{ $lot->occupancy_pct }}% full
+                        {{ $lot->free_slots }}/{{ $lot->total_slots }} spots free · {{ 100 - $lot->occupancy_pct }}% available
                     </p>
 
                     {{-- Per-type occupancy (from slot type designation; IR scans toggle slots, they can't tell vehicle type) --}}
-                    <div class="mt-3 grid grid-cols-2 gap-3">
-                        <div class="rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-center">
-                            <span class="text-xs font-black uppercase tracking-widest text-sky-300">
-                                <i class="fas fa-motorcycle mr-1"></i>2-Wheeler
-                            </span>
-                            <span class="mt-1 block text-2xl font-black text-white">{{ $lot->occupied_two_wheeler_slots_count }}</span>
-                            <span class="text-[10px] uppercase tracking-widest text-white/40">
-                                {{ $lot->two_wheeler_slots_count }} stalls &bull; {{ $lot->two_wheeler_slots_count > 0 ? round(($lot->occupied_two_wheeler_slots_count / $lot->two_wheeler_slots_count) * 100) : 0 }}% occupied
-                            </span>
+                    @if ($lot->two_wheeler_slots_count > 0 || $lot->four_wheeler_slots_count > 0)
+                        <div @class([
+                            'mt-3 grid gap-3',
+                            'grid-cols-2' => $lot->two_wheeler_slots_count > 0 && $lot->four_wheeler_slots_count > 0,
+                            'grid-cols-1' => $lot->two_wheeler_slots_count === 0 || $lot->four_wheeler_slots_count === 0,
+                        ])>
+                            @if ($lot->two_wheeler_slots_count > 0)
+                                <div class="rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2.5 text-center">
+                                    <span class="text-xs font-black uppercase tracking-widest text-sky-300">
+                                        <i class="fas fa-motorcycle mr-1"></i>2-Wheeler
+                                    </span>
+                                    <span class="mt-1 block text-2xl font-black text-white">{{ $lot->two_wheeler_slots_count - $lot->occupied_two_wheeler_slots_count }}</span>
+                                    <span class="text-[10px] uppercase tracking-widest text-white/40">
+                                        of {{ $lot->two_wheeler_slots_count }} stalls free
+                                    </span>
+                                </div>
+                            @endif
+                            @if ($lot->four_wheeler_slots_count > 0)
+                                <div class="rounded-xl border border-teal-400/30 bg-teal-500/10 px-4 py-2.5 text-center">
+                                    <span class="text-xs font-black uppercase tracking-widest text-teal-300">
+                                        <i class="fas fa-car mr-1"></i>4-Wheeler
+                                    </span>
+                                    <span class="mt-1 block text-2xl font-black text-white">{{ $lot->four_wheeler_slots_count - $lot->occupied_four_wheeler_slots_count }}</span>
+                                    <span class="text-[10px] uppercase tracking-widest text-white/40">
+                                        of {{ $lot->four_wheeler_slots_count }} stalls free
+                                    </span>
+                                </div>
+                            @endif
                         </div>
-                        <div class="rounded-xl border border-teal-400/30 bg-teal-500/10 px-4 py-2.5 text-center">
-                            <span class="text-xs font-black uppercase tracking-widest text-teal-300">
-                                <i class="fas fa-car mr-1"></i>4-Wheeler
-                            </span>
-                            <span class="mt-1 block text-2xl font-black text-white">{{ $lot->occupied_four_wheeler_slots_count }}</span>
-                            <span class="text-[10px] uppercase tracking-widest text-white/40">
-                                {{ $lot->four_wheeler_slots_count }} stalls &bull; {{ $lot->four_wheeler_slots_count > 0 ? round(($lot->occupied_four_wheeler_slots_count / $lot->four_wheeler_slots_count) * 100) : 0 }}% occupied
-                            </span>
-                        </div>
-                    </div>
-
-                    {{-- Stats --}}
-                    <dl class="mt-5 grid grid-cols-3 gap-3 text-center">
-                        <div class="rounded-xl bg-black/30 p-3">
-                            <dt class="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">Occupied</dt>
-                            <dd class="mt-1 text-xl font-black text-amber-300">{{ $lot->occupied_slots_count }}</dd>
-                        </div>
-                        <div class="rounded-xl bg-black/30 p-3">
-                            <dt class="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">Free</dt>
-                            <dd class="mt-1 text-xl font-black text-emerald-400">{{ $lot->free_slots }}</dd>
-                        </div>
-                        <div class="rounded-xl bg-black/30 p-3">
-                            <dt class="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">Total</dt>
-                            <dd class="mt-1 text-xl font-black text-sky-400">{{ $lot->total_slots }}</dd>
-                        </div>
-                    </dl>
+                    @endif
                 </article>
             @empty
                 <div class="md:col-span-2 xl:col-span-3 rounded-3xl border border-white/15 bg-white/10 p-10 text-center backdrop-blur-xl">
