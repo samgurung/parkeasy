@@ -123,8 +123,22 @@
                                 </div>
                             </div>
                             <div class="flex gap-3">
+                                @php
+                                    $lot = $kiosk->parkingLot;
+                                    $lotReady = $lot && $lot->floors_count > 0 && $lot->slots_count > 0;
+                                    $lotReadyReason = !$lot
+                                        ? 'Kiosk is not linked to a parking lot.'
+                                        : ($lot->floors_count === 0
+                                            ? 'This lot has no floors configured yet.'
+                                            : ($lot->slots_count === 0 ? 'This lot has no slots configured yet.' : null));
+                                @endphp
                                 <a href="{{ route('home') }}?kiosk={{ $kiosk->key }}" target="_blank" rel="noopener"
-                                   class="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-emerald-300 hover:bg-emerald-500/20 transition">
+                                   title="{{ $lotReady ? 'Open kiosk terminal' : $lotReadyReason }}"
+                                   @class([
+                                       'rounded-xl border px-4 py-2 text-xs font-black uppercase tracking-widest transition',
+                                       'border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20' => $lotReady,
+                                       'border-white/10 bg-white/5 text-white/30 cursor-not-allowed pointer-events-none' => !$lotReady,
+                                   ])>
                                     <i class="fas fa-up-right-from-square mr-1"></i> Open kiosk
                                 </a>
                                 <button wire:click="edit({{ $kiosk->id }})"

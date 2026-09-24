@@ -24,7 +24,9 @@ class KioskManager extends Component
     public function render(): View
     {
         return view('livewire.admin.kiosk-manager', [
-            'kiosks' => Kiosk::with('parkingLot')->orderBy('name')->get(),
+            'kiosks' => Kiosk::with([
+                'parkingLot' => fn ($q) => $q->withCount(['floors', 'slots']),
+            ])->orderBy('name')->get(),
             'lots' => ParkingLot::orderBy('lot_number')->get(),
         ])->layout('components.layouts.app', ['title' => 'Admin – Kiosks | ParkEasy']);
     }
