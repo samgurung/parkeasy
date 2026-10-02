@@ -64,9 +64,15 @@
                         Super admin
                     </span>
                 @else
-                    <span class="hidden max-w-[10rem] truncate rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white/60 sm:inline"
-                          title="{{ auth()->user()->lots()->pluck('name')->join(', ') }}">
-                        Lot admin
+                    {{-- Which lot a lot admin is in, since everything they can reach is
+                         scoped to it. They may hold more than one, so name the first and
+                         count the rest rather than truncating a list into a mystery. --}}
+                    @php
+                        $myLots = auth()->user()->lots()->pluck('name');
+                    @endphp
+                    <span class="hidden max-w-[12rem] truncate rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white/60 sm:inline"
+                          title="{{ auth()->user()->isSuperAdmin() ? 'Super admin' : 'Lot admin of '.$myLots->join(', ') }}">
+                        {{ $myLots->isEmpty() ? 'Lot admin' : $myLots->first().($myLots->count() > 1 ? ' +'.$myLots->count() - 1 : '') }}
                     </span>
                 @endif
                 <form method="POST" action="{{ route('logout') }}">

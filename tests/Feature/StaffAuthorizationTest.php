@@ -177,6 +177,38 @@ class StaffAuthorizationTest extends TestCase
         $this->assertStringNotContainsString(route('admin.lots'), $this->navHtml());
     }
 
+    public function test_the_nav_names_the_lot_a_lot_admin_is_in(): void
+    {
+        $this->lotB->update(['name' => 'Riverside']);
+        $this->actingAsLotAdmin([$this->lotB]);
+
+        // Everything a lot admin can reach is scoped to the lot they hold, so the lot's
+        // name is the fact worth having to hand - it was only in a hover title before.
+        $this->assertStringContainsString('Riverside', $this->navHtml());
+    }
+
+    public function test_the_nav_says_how_many_lots_a_lot_admin_holds_rather_than_truncating_them(): void
+    {
+        $this->lotA->update(['name' => 'Central Garage']);
+        $this->lotB->update(['name' => 'Riverside']);
+        $this->actingAsLotAdmin([$this->lotA, $this->lotB]);
+
+        $nav = $this->navHtml();
+
+        // Two lots cannot both fit in the badge, so it names one and counts the rest.
+        // Truncating instead would leave the operator unable to tell one lot from three.
+        $this->assertStringContainsString('Central Garage +1', $nav);
+        $this->assertStringContainsString('Lot admin of Central Garage, Riverside', $nav);
+    }
+
+    public function test_the_nav_falls_back_to_the_role_for_a_lot_admin_holding_no_lots(): void
+    {
+        $this->actingAsLotAdmin([]);
+
+        // An admin with no assignment is a real state - an empty badge would read as a bug.
+        $this->assertStringContainsString('Lot admin', $this->navHtml());
+    }
+
     public function test_a_lot_admin_sees_only_their_own_floors(): void
     {
         $this->floorIn($this->lotA, 'Ground A');
