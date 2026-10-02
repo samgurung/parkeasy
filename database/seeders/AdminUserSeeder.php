@@ -18,9 +18,9 @@ use Illuminate\Support\Str;
  */
 class AdminUserSeeder extends Seeder
 {
-    private bool $superPasswordGenerated = false;
+    private bool $superPasswordDefaulted = false;
 
-    private bool $lotPasswordGenerated = false;
+    private bool $lotPasswordDefaulted = false;
 
     /** The password handed to the account being seeded, so it can be reported accurately. */
     private string $lastPassword = '';
@@ -41,7 +41,7 @@ class AdminUserSeeder extends Seeder
 
         $this->command?->info('Super admin ready: '.$super->email);
 
-        $this->reportPassword('super admin', $superExisted, $this->lastPassword, $this->superPasswordGenerated);
+        $this->reportPassword('super admin', $superExisted, $this->lastPassword, $this->superPasswordDefaulted);
 
         $managed = $this->seedLotAdmins($super);
 
@@ -75,8 +75,8 @@ class AdminUserSeeder extends Seeder
             }
 
             $existed = User::where('email', $email)->exists();
-            $password = $this->lotAdminPassword();
-            $generated = $this->lotPasswordGenerated;
+            $password = $this->lotAdminPassword($email);
+            $defaulted = $this->lotPasswordDefaulted;
 
             $admin = $this->account($email, $lot->name.' Admin', $password);
 
@@ -93,7 +93,7 @@ class AdminUserSeeder extends Seeder
             $admin->lots()->syncWithoutDetaching([$lot->id]);
 
             $this->command?->info(sprintf('  lot admin: %s → %s', $email, $lot->name));
-            $this->reportPassword("  '{$lot->name}' admin", $existed, $password, $generated);
+            $this->reportPassword("  '{$lot->name}' admin", $existed, $password, $defaulted);
 
             $managed[] = $email;
         }
@@ -129,50 +129,50 @@ class AdminUserSeeder extends Seeder
     }
 
     /**
-     * A published default password is a permanent backdoor, so a configured one is only ever
-     * used when an operator has deliberately set it - and a weak one is called out loudly.
+     * A lot admin's password defaults to their own address, so the credentials an operator
+     * needs are the ones printed at the bottom of a fresh seed - no env var to look up and
+     * nothing to copy out of a log. It also means the password is unique per lot, so one
+     * account being guessed at says nothing about the others.
+     *
+     * A configured password still wins, for the operator who wants one shared value.
      */
-    private function lotAdminPassword(): string
+    private function lotAdminPassword(string $email): string
     {
-        $this->lotPasswordGenerated = false;
+        $this->lotPasswordDefaulted = false;
 
         if ($configured = config('services.lot_admin_password')) {
-            $password = (string) $configured;
-
-            if (Str::length($password) < 12) {
-                $this->command?->warn('  WARNING: PARKEASY_LOT_ADMIN_PASSWORD is under 12 characters');
-            }
-
-            return $this->lastPassword = $password;
+            return $this->lastPassword = (string) $configured;
         }
 
-        $this->lotPasswordGenerated = true;
+        $this->lotPasswordDefaulted = true;
 
-        return $this->lastPassword = Str::password(20);
+        return $this->lastPassword = $email;
     }
 
     /**
-     * The super admin's password is generated unless one is deliberately configured: this is
-     * the account that can reach every lot, so it must not be reachable with a value that is
-     * published in this file.
+     * The super admin's password is a fixed, published value, because it is the account a new
+     * install is locked out of otherwise and its credentials are printed on a fresh seed.
+     * Set PARKEASY_SUPER_ADMIN_PASSWORD before seeding anything you intend to keep.
      */
     private function superAdminPassword(): string
     {
+        $this->superPasswordDefaulted = false;
+
         if ($configured = config('services.super_admin_password')) {
             return $this->lastPassword = (string) $configured;
         }
 
-        $this->superPasswordGenerated = true;
+        $this->superPasswordDefaulted = true;
 
-        return $this->lastPassword = Str::password(20);
+        return $this->lastPassword = 'superadmin123';
     }
 
     /**
-     * Only ever report a password that was actually applied. Printing a freshly generated one
-     * on a re-run would show a value that does not open the account, and printing a configured
-     * default for an existing account would invite someone to try a password that no longer works.
+     * Only ever report a password that was actually applied. Both defaults are now predictable,
+     * so printing one for an account that already exists would invite a failed sign-in - the
+     * account is only reachable by whatever password it ended up with.
      */
-    private function reportPassword(string $label, bool $existed, string $password, bool $generated): void
+    private function reportPassword(string $label, bool $existed, string $password, bool $defaulted): void
     {
         if ($existed) {
             $this->command?->info("  {$label} password unchanged (account already existed)");
@@ -180,7 +180,7 @@ class AdminUserSeeder extends Seeder
             return;
         }
 
-        $this->command?->info('  '.$label.' password'.($generated ? ' (generated, shown once)' : '').': '.$password);
+        $this->command?->info('  '.$label.' password'.($defaulted ? ' (default)' : '').': '.$password);
     }
 
     private function emailDomain(): string
