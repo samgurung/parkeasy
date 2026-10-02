@@ -297,13 +297,10 @@ class OperatorAccessTest extends TestCase
 
     public function test_no_picker_is_offered_to_someone_who_cannot_operate(): void
     {
-        // Staff previewing a kiosk and anonymous visitors both have no gates to choose
-        // from - a list would be wrong for the first and noise for the second.
+        // Staff previewing a kiosk have no gates to choose from - a list would be wrong for
+        // them. It used to also be noise for anonymous visitors, but the terminal is behind a
+        // login now, so there is no such thing as an anonymous visitor here.
         $this->actingAsSuperAdmin();
-        $this->get('/')->assertOk()->assertDontSee('Choose your gate');
-
-        auth()->logout();
-
         $this->get('/')->assertOk()->assertDontSee('Choose your gate');
     }
 

@@ -26,14 +26,21 @@ use Symfony\Component\HttpFoundation\Response;
  * moving a terminal is just a new URL and nothing needs clearing first, because a new value
  * simply overwrites the old one.
  *
- * Why both stores, and why the session is read as well as written. An anonymous terminal has
- * no login, so the session is the only thing that ends when the browser restarts - the
- * cookie is what keeps the gate bound across that. A signed-in browser has the opposite
- * problem: the selection should last exactly as long as the login and no longer, and a login
- * is *narrower* than a browser profile, so a cookie would keep it pinned for a year after
- * sign-out and dump whoever used that machine onto a gate view. That is why the year-long
- * cookie is written only for a browser that is the gate: an anonymous terminal, or an
- * operator's tablet. Everyone else's selection lives in the session and ends at the logout.
+ * Why both stores, and why the session is read as well as written. An operator's tablet is
+ * the gate, and a tablet is switched off and rebooted mid-shift, so the session alone is not
+ * enough - the year-long cookie is what keeps the gate bound across a restart, and it is
+ * paired with a remember-me login for the same reason: losing either one costs a walk to the
+ * barrier. A signed-in staff member has the opposite problem: their selection should last
+ * exactly as long as the login and no longer, and a login is *narrower* than a browser
+ * profile, so a cookie would keep it pinned for a year after sign-out and dump whoever used
+ * that machine onto a gate view. That is why the year-long cookie is written only for a
+ * browser that *is* the gate - an operator's tablet - and cleared for everyone else, whose
+ * selection lives in the session and ends at the logout.
+ *
+ * This middleware runs before the `auth` middleware, so a signed-out browser arriving with a
+ * `?kiosk=` link has its binding resolved and remembered, and is then redirected to sign in.
+ * That is deliberate: it is what puts the operator back at the gate they just scanned a QR
+ * code for, instead of on a generic landing page.
  *
  * A staff member who signed in before this rule existed may still be carrying such a cookie,
  * so the middleware clears it on any request rather than merely declining to refresh it -
@@ -78,12 +85,16 @@ class ResolveKioskBinding
             // currently on, and for a staff member it is the whole of their binding.
             $request->session()->put('kiosk_key', $kiosk->key);
 
-            // The year-long cookie is only for a browser that *is* the gate. Signed-in staff
-            // are on their own machine, so they get the cookie cleared rather than written.
-            if ($user && ! $user->operatesKiosks()) {
-                self::forgetCookie();
-            } else {
+            // The year-long cookie belongs to the gate tablet and nothing else. Staff are on
+            // their own machine, so their selection lives in the session and they get the
+            // cookie cleared rather than written. A guest gets neither: the terminal is
+            // behind a login, so there is no anonymous gate left to keep bound, and this
+            // middleware runs on the public dashboards too - planting a durable gate cookie
+            // from /lots would outlive whatever the browser did next.
+            if ($user?->operatesKiosks()) {
                 $this->remember($kiosk->key);
+            } else {
+                self::forgetCookie();
             }
         }
 

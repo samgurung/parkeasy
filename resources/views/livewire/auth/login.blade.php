@@ -1,5 +1,6 @@
-{{-- Staff sign-in. The kiosk terminal at / is deliberately *not* behind this: a shared
-     gate tablet has no keyboard-bound account and must render for anyone who opens it. --}}
+{{-- The way in. Behind this sits everything that moves a vehicle: the kiosk terminal at /
+     is the entry and exit screen, so reaching it means being somebody. A gate tablet signs
+     in once and then stays bound to its own gate. --}}
 
 <div class="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center px-4 py-12">
     <div class="w-full rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl shadow-black/40">
@@ -7,8 +8,8 @@
             <span class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 text-lg text-white shadow-lg shadow-blue-500/30">
                 <i class="fas fa-user-shield"></i>
             </span>
-            <h1 class="text-xl font-black uppercase tracking-widest text-white">Staff sign in</h1>
-            <p class="mt-1 text-sm text-white/50">Lot admins and super admins only.</p>
+            <h1 class="text-xl font-black uppercase tracking-widest text-white">Sign in</h1>
+            <p class="mt-1 text-sm text-white/50">Gate operators, lot admins and super admins.</p>
         </div>
 
         <form wire:submit="login" class="space-y-4">
@@ -39,8 +40,9 @@
 
         <p class="mt-6 flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/45">
             <i class="fas fa-circle-info mt-0.5 shrink-0 text-sky-300"></i>
-            <span>Kiosk terminals are not signed in. A card arriving at a gate is read on the
-                terminal itself, at <a href="{{ route('home') }}" class="text-sky-300 underline">the kiosk page</a>.</span>
+            <span>An operator is sent straight to their lot's gate and stays there — one sign-in
+                per shift, and the tablet remembers its own gate across a restart. Lot admins and
+                super admins land in the admin panel.</span>
         </p>
     </div>
 </div>

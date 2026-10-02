@@ -64,13 +64,52 @@ class StaffAuthorizationTest extends TestCase
         }
     }
 
-    public function test_the_kiosk_terminal_and_live_dashboards_stay_public(): void
+    public function test_the_kiosk_terminal_needs_a_login_but_admits_any_account(): void
     {
-        // A gate tablet and a wall monitor have no account, and the occupancy figures they
-        // show are not sensitive. Locking these would break the gate to no security gain.
-        $this->get(route('home'))->assertOk();
+        // The terminal is the entry and exit screen. It is not a page of its own - it is what
+        // `/` becomes once you are signed in - so the check that matters is that a guest is
+        // never shown it, and that being able to sign in is enough to reach it.
+        $this->get(route('home'))->assertOk()->assertDontSee('id="manual-card"', false);
+
+        $this->actingAsOperator([$this->lotA]);
+        $this->get(route('home'))->assertOk()->assertSee('id="manual-card"', false);
+
+        $this->actingAsLotAdmin([$this->lotA]);
+        $this->get(route('home'))->assertOk()->assertSee('id="manual-card"', false);
+
+        $this->actingAsSuperAdmin();
+        $this->get(route('home'))->assertOk()->assertSee('id="manual-card"', false);
+    }
+
+    public function test_the_live_dashboards_stay_public(): void
+    {
+        // A wall monitor has no account and no keyboard, and the occupancy figures it shows
+        // are not sensitive. Locking these would break the display to no security gain.
         $this->get(route('lots.overview'))->assertOk();
         $this->get(route('slots.dashboard'))->assertOk();
+    }
+
+    public function test_an_account_with_no_role_lands_on_the_unbound_terminal(): void
+    {
+        // Failing closed has to mean "reaches nothing", not "cannot sign in". Such an account
+        // is stuck at the unbound page, which is the point: it is visible as broken rather
+        // than silently treated as an operator.
+        $user = $this->makeUser();
+
+        $this->actingAs($user);
+        $this->get(route('home'))->assertOk()->assertSee('This kiosk is not linked to a parking lot');
+    }
+
+    private function makeUser(array $attributes = []): User
+    {
+        static $sequence = 0;
+        $sequence++;
+
+        return User::create(array_merge([
+            'name' => 'No Role',
+            'email' => "norole{$sequence}@parkeasy.test",
+            'password' => 'password',
+        ], $attributes));
     }
 
     public function test_a_signed_in_admin_is_sent_onwards_from_the_login_page(): void

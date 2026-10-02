@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Access;
+use App\Models\Kiosk;
 use App\Models\ParkingLot;
 use App\Models\User;
 use Database\Seeders\AdminUserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -45,19 +48,28 @@ class AdminUserSeederTest extends TestCase
             ->firstOrFail();
     }
 
+    /** The gate operator this seeder created for a given lot. */
+    private function operatorFor(ParkingLot $lot): User
+    {
+        return User::role(User::ROLE_OPERATOR)
+            ->whereHas('lots', fn ($q) => $q->where('parking_lots.id', $lot->id))
+            ->firstOrFail();
+    }
+
     private function seedAdmins(): void
     {
         $this->seed(AdminUserSeeder::class);
     }
 
-    public function test_it_creates_a_super_admin_and_one_admin_per_lot(): void
+    public function test_it_creates_a_super_admin_and_one_admin_and_operator_per_lot(): void
     {
         $this->lot('Police Bazaar');
         $this->lot('Tura Bus Stand');
 
         $this->seedAdmins();
 
-        $this->assertSame(3, User::count(), 'One super admin plus one per lot.');
+        // Super admin, plus a lot admin and an operator for each of two lots.
+        $this->assertSame(5, User::count());
 
         $super = User::where('email', 'superadmin@parkeasy.test')->firstOrFail();
         $this->assertTrue($super->isSuperAdmin());
@@ -65,6 +77,115 @@ class AdminUserSeederTest extends TestCase
         $this->assertCount(0, $super->lots);
 
         $this->assertSame(2, User::role(User::ROLE_LOT_ADMIN)->count());
+        $this->assertSame(2, User::role(User::ROLE_OPERATOR)->count());
+    }
+
+    public function test_each_operator_is_attached_to_exactly_its_own_lot(): void
+    {
+        // The whole point of the role: an operator runs the gates of one lot, so seeding two
+        // lots must not produce two accounts that can both work either gate.
+        $a = $this->lot('Police Bazaar');
+        $b = $this->lot('Tura Bus Stand');
+
+        $this->seedAdmins();
+
+        $operators = User::role(User::ROLE_OPERATOR)->get();
+
+        $this->assertCount(2, $operators);
+
+        foreach ($operators as $operator) {
+            $this->assertCount(1, $operator->lots);
+        }
+
+        $this->assertNotSame(
+            $this->operatorFor($a)->id,
+            $this->operatorFor($b)->id,
+            'Two lots must not share one gate operator.'
+        );
+        $this->assertFalse($this->operatorFor($a)->administersLot($b));
+        $this->assertFalse($this->operatorFor($b)->administersLot($a));
+    }
+
+    public function test_a_seeded_operator_cannot_reach_the_admin_panel(): void
+    {
+        // The operator is seeded for convenience, so the seeder must not hand out a role that
+        // can configure anything. This is the boundary the whole role exists to hold.
+        $this->lot('Police Bazaar');
+
+        $this->seedAdmins();
+
+        $operator = $this->operatorFor(ParkingLot::firstOrFail());
+
+        $this->assertTrue($operator->isOperator());
+        $this->assertFalse($operator->canUseAdminPanel());
+        $this->assertFalse($operator->can(Access::MANAGE_LOTS));
+        $this->assertFalse($operator->can(Access::MANAGE_KIOSKS));
+        $this->assertFalse($operator->can(Access::MANAGE_FLOORS));
+        $this->assertFalse($operator->can(Access::MANAGE_USERS));
+        $this->assertTrue($operator->can(Access::OPERATE_KIOSKS));
+    }
+
+    public function test_operator_addresses_survive_a_rename(): void
+    {
+        $lot = $this->lot('Tura Bus Stand');
+
+        $this->seedAdmins();
+
+        $before = $this->operatorFor($lot)->email;
+
+        $lot->update(['name' => 'Renamed Depot']);
+
+        $this->seedAdmins();
+
+        $this->assertSame(3, User::count(), 'A rename must not spawn a second account per role.');
+        $this->assertSame($before, $this->operatorFor($lot->fresh())->email);
+        $this->assertTrue($this->operatorFor($lot->fresh())->administersLot($lot->fresh()));
+    }
+
+    public function test_a_seeded_operator_signs_in_with_their_own_address_when_none_is_configured(): void
+    {
+        config(['services.operator_password' => null]);
+
+        $this->lot('Police Bazaar');
+
+        $this->seedAdmins();
+
+        $operator = $this->operatorFor(ParkingLot::firstOrFail());
+
+        $this->assertTrue(
+            Hash::check($operator->email, $operator->password),
+            "An operator's default password is their own username, so seed credentials are readable from the address alone."
+        );
+    }
+
+    public function test_a_configured_operator_password_is_honoured(): void
+    {
+        config(['services.operator_password' => 'a-deliberately-long-password']);
+
+        $this->lot('Police Bazaar');
+
+        $this->seedAdmins();
+
+        $this->assertTrue(
+            Hash::check('a-deliberately-long-password', User::role(User::ROLE_OPERATOR)->firstOrFail()->password)
+        );
+    }
+
+    public function test_the_operator_password_is_independent_of_the_lot_admin_one(): void
+    {
+        // A shared operator password is a legitimate choice; letting it leak into the lot
+        // admins would quietly widen who holds it.
+        config([
+            'services.operator_password' => 'operators-share-this',
+            'services.lot_admin_password' => null,
+        ]);
+
+        $this->lot('Police Bazaar');
+
+        $this->seedAdmins();
+
+        $this->assertTrue(Hash::check('operators-share-this', $this->operatorFor(ParkingLot::firstOrFail())->password));
+        $this->assertFalse(Hash::check('operators-share-this', $this->adminFor(ParkingLot::firstOrFail())->password));
     }
 
     public function test_lots_whose_names_reduce_to_the_same_slug_get_separate_accounts(): void
@@ -123,8 +244,8 @@ class AdminUserSeederTest extends TestCase
         $this->seedAdmins();
 
         $this->assertSame(
-            2, User::count(),
-            'A rename must not spawn a second account: one super admin, one lot admin.'
+            3, User::count(),
+            'A rename must not spawn a second account: one super admin, one lot admin, one operator.'
         );
         // Still the same person, still administering the same lot.
         $this->assertSame($before, $this->adminFor($lot->fresh())->email);
@@ -231,6 +352,19 @@ class AdminUserSeederTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'retired.admin@parkeasy.test']);
     }
 
+    public function test_operators_are_reported_but_never_deleted_when_no_lot_matches(): void
+    {
+        $this->lot('Police Bazaar');
+        $this->seedAdmins();
+
+        $stale = $this->operatorFor(ParkingLot::firstOrFail());
+        $stale->update(['email' => 'retired.operator@parkeasy.test']);
+
+        $this->seedAdmins();
+
+        $this->assertDatabaseHas('users', ['email' => 'retired.operator@parkeasy.test']);
+    }
+
     public function test_an_unassigned_lot_admin_administers_nothing(): void
     {
         // Failing closed is the whole point of a lot-scoped role.
@@ -241,5 +375,29 @@ class AdminUserSeederTest extends TestCase
         $admin->lots()->sync([]);
 
         $this->assertFalse($admin->fresh()->administersLot($lot));
+    }
+
+    public function test_an_unassigned_operator_can_reach_no_gate(): void
+    {
+        // Same failure mode as the lot admin above, but the consequence is worse: an operator
+        // with no lot must operate nothing rather than falling back to every lot.
+        $lot = $this->lot('Police Bazaar');
+        $kiosk = Kiosk::create([
+            'name' => 'Main Gate A',
+            'key' => Kiosk::makeKey('Main Gate A'),
+            'type' => Kiosk::TYPE_ENTRY,
+            'parking_lot_id' => $lot->id,
+        ]);
+
+        $this->seedAdmins();
+
+        $operator = $this->operatorFor($lot);
+        $operator->lots()->sync([]);
+
+        $operator = $operator->fresh();
+
+        $this->assertFalse($operator->administersLot($lot));
+        $this->assertCount(0, $operator->operableKiosks());
+        $this->assertFalse(Gate::forUser($operator)->allows('operate', $kiosk));
     }
 }

@@ -12,6 +12,22 @@ class Home extends Component
 {
     public function render()
     {
+        // `/` is two pages behind one URL. A guest gets the front door: what the app is and a
+        // way in, rather than a redirect that tells them nothing. Signing in replaces it with
+        // the kiosk terminal.
+        //
+        // This is the login boundary, so it is worth being explicit about why it is here and
+        // not in `->middleware('auth')` on the route. The terminal is the entry and exit
+        // screen: from it a card is read, a vehicle is charged, a vehicle is released. An open
+        // browser at a barrier would let whoever picked it up do all three. Two reasons to
+        // branch instead of redirecting:
+        //   - a first-time visitor gets an explanation instead of a login form.
+        //   - the kiosk URL stays `/?kiosk=<key>` with no path prefix, which is what keeps
+        //     every printed label and QR code already on a gate working.
+        if (auth()->guest()) {
+            return view('livewire.landing');
+        }
+
         // Which kiosk this terminal is bound to is resolved by ResolveKioskBinding on
         // every web request, from the ?kiosk= URL on first visit and from the remembered
         // cookie or session after that, so a browser restart does not unbind the gate.
@@ -35,11 +51,10 @@ class Home extends Component
     /**
      * The gates an operator may run, so the unbound page can offer them a choice.
      *
-     * Empty for anyone else: an anonymous visitor has no account to scope by, and staff
-     * arrived here to preview one specific kiosk that has already resolved, so a list would
-     * be either wrong or noise. An operator with two or more gates is the only real case -
-     * entry or exit is a genuine decision they have to make, and the answer has to be
-     * recorded in the binding rather than guessed at.
+     * Empty for anyone else: staff reached this to preview one specific kiosk that has
+     * already resolved, so a list would be noise. An operator with two or more gates is the
+     * only real case - entry or exit is a genuine decision they have to make, and the answer
+     * has to be recorded in the binding rather than guessed at.
      *
      * @return Collection<int, Kiosk>
      */

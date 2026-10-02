@@ -20,6 +20,8 @@ return [
 
     'lot_admin_password' => env('PARKEASY_LOT_ADMIN_PASSWORD'),
 
+    'operator_password' => env('PARKEASY_OPERATOR_PASSWORD'),
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

@@ -53,6 +53,16 @@
                         <x-nav-link route="admin.vehicles" icon="fas fa-car-side" label="Vehicles" step="4" />
                     @endcan
                 @endif
+
+                {{-- Accounts are not a setup step: who may sign in, and where, is decided
+                     after the lots exist. Kept in its own group so the setup numbers above
+                     stay a sequence rather than growing a step nobody sets up first. --}}
+                @can(\App\Models\Access::MANAGE_USERS)
+                    <span class="mx-2 h-6 w-px bg-white/15" role="separator"></span>
+
+                    <span class="mr-1 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">People</span>
+                    <x-nav-link route="admin.users" icon="fas fa-users" label="Staff" />
+                @endcan
             @endauth
         </nav>
 
@@ -144,6 +154,14 @@
                 </p>
             @endif
 
+            {{-- Accounts sit outside the setup sequence, matching the desktop nav. --}}
+            @can(\App\Models\Access::MANAGE_USERS)
+                <div class="mb-2 mt-5 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">People</div>
+                <div class="grid gap-2">
+                    <x-nav-link route="admin.users" icon="fas fa-users" label="Staff Accounts" />
+                </div>
+            @endcan
+
             {{-- Who is signed in, and the way out. --}}
             <div class="mt-5 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                 <div class="min-w-0">
@@ -164,7 +182,7 @@
         @else
             <div class="mt-5">
                 <a href="{{ route('login') }}" class="block rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 py-3 text-center text-xs font-bold uppercase tracking-widest text-sky-300">
-                    <i class="fas fa-user-shield mr-1"></i> Staff sign in
+                    <i class="fas fa-user-shield mr-1"></i> Sign in
                 </a>
             </div>
         @endauth

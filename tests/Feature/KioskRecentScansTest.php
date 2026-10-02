@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Entry;
 use App\Models\Kiosk;
 use App\Models\ParkingLot;
+use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -53,6 +54,19 @@ class KioskRecentScansTest extends TestCase
         ]);
     }
 
+    /** A signed-in account with no role, standing in for staff previewing a gate. */
+    private function previewer(): User
+    {
+        static $sequence = 0;
+        $sequence++;
+
+        return User::create([
+            'name' => 'Staff',
+            'email' => "staff{$sequence}@parkeasy.test",
+            'password' => 'password',
+        ]);
+    }
+
     /**
      * Load the kiosk page tied to the given kiosk and return the "recent scans" rows
      * as card codes paired with their status.
@@ -61,6 +75,11 @@ class KioskRecentScansTest extends TestCase
      */
     private function recentScansFor(Kiosk $kiosk): array
     {
+        // The terminal is behind a login now, so the feed is only ever read by someone
+        // signed in. A role-less account stands in for "staff previewing a gate": it is
+        // neither lot-scoped nor an operator, so it sees whatever kiosk it is pointed at.
+        $this->actingAs($this->previewer());
+
         $response = $this->get('/?kiosk='.$kiosk->key);
         $response->assertOk();
 
@@ -185,7 +204,9 @@ class KioskRecentScansTest extends TestCase
     public function test_the_kiosk_key_persists_in_the_session_across_navigation(): void
     {
         // The kiosk is keyed by query string, then remembered so / and other pages agree.
-        $this->get('/?kiosk=test-entry');
+        $this->actingAs($this->previewer());
+
+        $this->get('/?kiosk=test-entry')->assertOk();
 
         $this->assertSame('test-entry', session('kiosk_key'));
     }

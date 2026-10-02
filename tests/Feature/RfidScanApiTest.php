@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\ResolveKioskBinding;
+use App\Models\Access;
 use App\Models\Entry;
 use App\Models\Kiosk;
 use App\Models\ParkingLot;
@@ -86,6 +87,28 @@ class RfidScanApiTest extends TestCase
             'email' => "staff{$sequence}@parkeasy.test",
             'password' => 'password',
         ]);
+    }
+
+    /**
+     * Gate staff attached to a lot.
+     *
+     * An operator rather than a bare account, because the two are treated differently by the
+     * kiosk binding: an operator's terminal is gate hardware and keeps a year-long cookie
+     * across restarts, while a signed-in staff member's selection lives and dies with the
+     * session.
+     */
+    private function makeOperator(ParkingLot $lot): User
+    {
+        // Only the handful of tests that need an operator pay for this; the rest of the file
+        // is about scan behaviour and has no roles to set up.
+        Access::sync();
+
+        $operator = $this->makeUser();
+
+        $operator->assignRole(User::ROLE_OPERATOR);
+        $operator->lots()->sync([$lot->id]);
+
+        return $operator->fresh();
     }
 
     private function scan(string $rfid, string $type, int $lot): TestResponse
@@ -513,6 +536,40 @@ class RfidScanApiTest extends TestCase
         $lot = $this->makeLot(self::LOT_A);
         $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
 
+        $this->actingAs($this->makeUser());
+
+        $this->get('/?kiosk=main-gate')
+            ->assertOk()
+            ->assertSee('Main Gate')
+            ->assertSee('PARKING LOT #'.self::LOT_A);
+    }
+
+    public function test_the_kiosk_terminal_is_closed_to_an_anonymous_visitor(): void
+    {
+        // The terminal is the entry and exit screen: an open browser at a gate can park,
+        // charge and release a vehicle. A guest therefore gets the landing page and never a
+        // working gate - and notably not even when they arrive holding a valid kiosk URL,
+        // which is the case that would matter if the URL were guessable off a printed label.
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+
+        foreach (['/', '/?kiosk=main-gate'] as $url) {
+            $this->get($url)
+                ->assertOk()
+                ->assertSee('RFID parking management')
+                ->assertDontSee('Main Gate')
+                ->assertDontSee('PARKING LOT #'.self::LOT_A)
+                ->assertDontSee('id="manual-card"', false);
+        }
+    }
+
+    public function test_a_signed_in_operator_reaches_the_terminal(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+
+        $this->actingAs($this->makeOperator($lot));
+
         $this->get('/?kiosk=main-gate')
             ->assertOk()
             ->assertSee('Main Gate')
@@ -524,7 +581,13 @@ class RfidScanApiTest extends TestCase
         $lot = $this->makeLot(self::LOT_A);
         $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate');
 
+        // A gate tablet is signed in now, but it still has to survive being switched off
+        // mid-shift - nobody is retyping a URL at a barrier. The remember-me cookie keeps the
+        // login and the year-long kiosk cookie keeps the gate, so both have to be planted.
+        $operator = $this->makeOperator($lot);
+
         // First visit binds the terminal and plants the long-lived cookie.
+        $this->actingAs($operator);
         $this->get('/?kiosk=main-gate')
             ->assertOk()
             ->assertCookie(ResolveKioskBinding::COOKIE_NAME);
@@ -548,6 +611,8 @@ class RfidScanApiTest extends TestCase
         $lot = $this->makeLot(self::LOT_A);
         $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate');
 
+        $this->actingAs($this->makeUser());
+
         // A shared machine that has never been bound must not inherit a gate, and must
         // not be given a binding by merely being looked at.
         $this->get('/')
@@ -556,10 +621,25 @@ class RfidScanApiTest extends TestCase
             ->assertCookieMissing(ResolveKioskBinding::COOKIE_NAME);
     }
 
+    public function test_a_public_page_does_not_plant_a_durable_gate_binding(): void
+    {
+        // The kiosk binding middleware runs on the whole web group, so it also sees the public
+        // dashboards. A year-long gate cookie planted from /lots would outlive whatever the
+        // browser did next, and would outlive the login it was never meant to depend on.
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate');
+
+        $this->get('/lots?kiosk=main-gate')
+            ->assertOk()
+            ->assertCookieExpired(ResolveKioskBinding::COOKIE_NAME);
+    }
+
     public function test_an_unknown_kiosk_key_is_not_remembered(): void
     {
         $lot = $this->makeLot(self::LOT_A);
         $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate');
+
+        $this->actingAs($this->makeUser());
 
         // A typo or a deleted kiosk must not be stored: binding to it would strand the
         // terminal on a gate that does not exist, on every later page load.
@@ -577,6 +657,8 @@ class RfidScanApiTest extends TestCase
         $lotB = $this->makeLot(self::LOT_B);
         $this->makeKiosk($lotA, Kiosk::TYPE_ENTRY, 'in-gate');
         $this->makeKiosk($lotB, Kiosk::TYPE_EXIT, 'out-gate');
+
+        $this->actingAs($this->makeUser());
 
         // Moving a tablet to a different gate is just opening that gate's URL; the new
         // binding overwrites the old one rather than needing an explicit unbind.
@@ -600,7 +682,7 @@ class RfidScanApiTest extends TestCase
         $lot = $this->makeLot(self::LOT_A);
         $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate');
 
-        // The cookie is remembered for a year, so a shared machine that once opened a
+        // The cookie is remembered for a year, so a gate tablet that once opened a
         // kiosk link needs a way back to the unbound state.
         $this->withCookie(ResolveKioskBinding::COOKIE_NAME, 'main-gate')
             ->get(route('kiosk.forget'))
@@ -610,6 +692,8 @@ class RfidScanApiTest extends TestCase
         $this->assertNull(session('kiosk_key'));
 
         $this->flushSession();
+
+        $this->actingAs($this->makeUser());
 
         $this->get('/')
             ->assertOk()
@@ -686,10 +770,13 @@ class RfidScanApiTest extends TestCase
 
         $this->post('/logout')->assertRedirect('/login');
 
-        // A login is the scope: the next person to sign in on this machine is not left at
-        // whatever gate the last user happened to be looking at.
+        // A login is the scope, twice over. The session is gone, so the kiosk selection went
+        // with it; and because the terminal only appears once signed in, the next person to
+        // open this browser lands on the landing page rather than standing at whatever gate
+        // the last user happened to be looking at.
         $this->get('/')
             ->assertOk()
+            ->assertSee('RFID parking management')
             ->assertDontSee('Main Gate');
     }
 
@@ -713,10 +800,12 @@ class RfidScanApiTest extends TestCase
         $this->assertSame('side-gate', session('kiosk_key'));
     }
 
-    public function test_an_anonymous_terminal_keeps_its_binding_across_the_session(): void
+    public function test_a_terminal_keeps_its_binding_across_the_session(): void
     {
         $lot = $this->makeLot(self::LOT_A);
         $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+
+        $this->actingAs($this->makeOperator($lot));
 
         $this->get('/?kiosk=main-gate')->assertOk();
 
@@ -749,6 +838,8 @@ class RfidScanApiTest extends TestCase
     public function test_kiosk_page_warns_when_not_linked_to_a_lot(): void
     {
         $this->makeLot(self::LOT_A);
+
+        $this->actingAs($this->makeUser());
 
         $this->get('/?kiosk=unknown-key')
             ->assertOk()

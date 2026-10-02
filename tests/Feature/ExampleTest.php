@@ -10,12 +10,21 @@ class ExampleTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * A basic test example.
+     * The root is the front door. A guest gets the landing page: it has to explain the app and
+     * offer the way in, because "redirect to /login" tells a first-time visitor what they may not
+     * see but not what they are signing in to.
      */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_the_root_is_a_landing_page_for_a_guest(): void
     {
-        $response = $this->get('/');
+        $response = $this->get('/')->assertOk();
 
-        $response->assertStatus(200);
+        // An explanation, and the way in.
+        $response->assertSee('RFID parking management');
+        $response->assertSee('Sign in');
+        $response->assertSee(route('login'), false);
+
+        // And it must not be the terminal in disguise: no gate, no card entry, no binding.
+        $response->assertDontSee('Choose your gate');
+        $response->assertDontSee('id="manual-card"', false);
     }
 }
