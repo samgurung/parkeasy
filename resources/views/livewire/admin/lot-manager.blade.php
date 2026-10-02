@@ -100,8 +100,7 @@
             @unless ($canManageLots)
                 <p class="mb-4 flex items-start gap-2 rounded-2xl border border-sky-400/25 bg-sky-500/10 px-5 py-3 text-sm text-sky-100">
                     <i class="fas fa-circle-info mt-0.5 shrink-0"></i>
-                    You administer the lots listed here. Adding or changing lots is a super admin job,
-                    because a lot is site-wide configuration rather than local to you.
+                    Administer your lots here
                 </p>
             @endunless
 
