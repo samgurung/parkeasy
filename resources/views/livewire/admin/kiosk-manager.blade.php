@@ -75,15 +75,6 @@
                         <i class="fas fa-plus mr-2"></i> Add Kiosk
                     </button>
                 </div>
-                <p class="text-xs text-white/40 sm:col-span-2 lg:col-span-4">
-                    <i class="fas fa-circle-info mr-1 text-sky-400"></i>
-                    The gate type decides what a scan does: an
-                    <span class="font-semibold text-emerald-300">ENTRY</span> kiosk admits vehicles and is the only place a new
-                    card can be enrolled, while an <span class="font-semibold text-rose-300">EXIT</span> kiosk releases them and
-                    charges the fee. Drivers just scan — there is nothing to arm.
-                    Open the kiosk at <span class="font-mono text-sky-300">/ ?kiosk=&lt;key&gt;</span> so it knows which parking lot to
-                    report against. The RFID reader must send the same <span class="font-mono text-sky-300">lot</span> number.
-                </p>
             </form>
         </section>
 
