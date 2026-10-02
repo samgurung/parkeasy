@@ -9,19 +9,24 @@ use Illuminate\Database\Seeder;
 class KioskSeeder extends Seeder
 {
     /**
-     * Seed an entry and exit kiosk for each seeded parking lot.
+     * Seed an entry and an exit kiosk for each seeded parking lot. The type is what
+     * makes a kiosk admit or release vehicles, so each pair faces opposite ways.
+     *
+     * The key is the ?kiosk= value the browser is tied to, so it stays stable and
+     * human-readable. Renaming a key orphans the kiosk it referred to, so it is only
+     * ever changed here.
      *
      * Idempotent: re-running updates by the unique kiosk key instead of duplicating.
      */
     public function run(): void
     {
         $kiosks = [
-            ['name' => 'Downtown Entry', 'key' => 'downtown-entry', 'lot_number' => 1],
-            ['name' => 'Downtown Exit', 'key' => 'downtown-exit', 'lot_number' => 1],
-            ['name' => 'Railway Entry', 'key' => 'railway-entry', 'lot_number' => 2],
-            ['name' => 'Railway Exit', 'key' => 'railway-exit', 'lot_number' => 2],
-            ['name' => 'City Mall Entry', 'key' => 'city-mall-entry', 'lot_number' => 3],
-            ['name' => 'City Mall Exit', 'key' => 'city-mall-exit', 'lot_number' => 3],
+            ['name' => 'Police Bazaar Entry', 'key' => 'police-bazaar-entry', 'lot_number' => 1, 'type' => Kiosk::TYPE_ENTRY],
+            ['name' => 'Police Bazaar Exit', 'key' => 'police-bazaar-exit', 'lot_number' => 1, 'type' => Kiosk::TYPE_EXIT],
+            ['name' => 'Tura Bus Stand Entry', 'key' => 'tura-bus-stand-entry', 'lot_number' => 2, 'type' => Kiosk::TYPE_ENTRY],
+            ['name' => 'Tura Bus Stand Exit', 'key' => 'tura-bus-stand-exit', 'lot_number' => 2, 'type' => Kiosk::TYPE_EXIT],
+            ['name' => 'Sohra Entry', 'key' => 'sohra-entry', 'lot_number' => 3, 'type' => Kiosk::TYPE_ENTRY],
+            ['name' => 'Sohra Exit', 'key' => 'sohra-exit', 'lot_number' => 3, 'type' => Kiosk::TYPE_EXIT],
         ];
 
         foreach ($kiosks as $spec) {
@@ -29,7 +34,7 @@ class KioskSeeder extends Seeder
 
             Kiosk::updateOrCreate(
                 ['key' => $spec['key']],
-                ['name' => $spec['name'], 'parking_lot_id' => $lot?->id],
+                ['name' => $spec['name'], 'type' => $spec['type'], 'parking_lot_id' => $lot?->id],
             );
         }
     }
