@@ -64,24 +64,59 @@
                 </div>
             </div>
         @endif
-        <p id="kiosk-hint" class="mt-6 text-center text-lg text-white/85">Tap a direction, then scan your card</p>
+        @if ($kioskType)
+            <p id="kiosk-hint" class="mt-6 text-center text-lg text-white/85">Scan your card</p>
+        @else
+            <p id="kiosk-hint" class="mt-6 text-center text-lg font-bold text-amber-300">
+                <i class="fas fa-triangle-exclamation mr-1"></i>
+                This kiosk has no gate type. Set it to ENTRY or EXIT in the admin panel to start scanning.
+            </p>
+        @endif
 
-        <main class="grid flex-1 grid-cols-1 items-stretch gap-8 sm:grid-cols-2 my-8">
-            <button id="scan-entry" type="button"
-                class="kiosk-btn group relative flex flex-col items-center justify-center gap-5 rounded-[2.5rem] bg-gradient-to-br from-emerald-400 to-teal-600 p-10 text-white shadow-[0_25px_80px_-15px_rgba(16,185,129,.55)]">
-                <i
-                    class="fas fa-arrow-right-to-bracket kiosk-btn-icon text-7xl sm:text-8xl transition-transform duration-300 group-hover:scale-110"></i>
-                <span class="text-5xl sm:text-6xl font-black tracking-[0.2em] drop-shadow-lg">ENTRY</span>
-                <span class="kiosk-btn-tag text-sm font-bold uppercase tracking-[0.35em] text-white/85">Entering</span>
-            </button>
+        @php
+            $entryActive = $kioskType === 'entry';
+            $exitActive = $kioskType === 'exit';
+        @endphp
+        {{-- These are status indicators, not controls: the kiosk's registered gate type
+             decides what a scan does, so there is nothing for a driver to press. --}}
+        <main class="grid flex-1 grid-cols-1 items-stretch gap-8 sm:grid-cols-2 my-8" role="status" aria-label="Gate status">
+            <div id="scan-entry" @class([
+                    'kiosk-gate relative flex flex-col items-center justify-center gap-5 rounded-[2.5rem] p-10 text-white',
+                    'bg-gradient-to-br from-emerald-400 to-teal-600 shadow-[0_25px_80px_-15px_rgba(16,185,129,.55)]' => $entryActive,
+                    'bg-white/5 text-white/25 border border-white/10' => ! $entryActive,
+                ])>
+                <i @class([
+                        'fas fa-arrow-right-to-bracket kiosk-gate-icon text-7xl sm:text-8xl',
+                        'drop-shadow-lg' => $entryActive,
+                    ])></i>
+                <span class="text-5xl sm:text-6xl font-black tracking-[0.2em]">ENTRY</span>
+                <span class="kiosk-gate-tag text-sm font-bold uppercase tracking-[0.35em]">
+                    @if ($entryActive)
+                        <i class="fas fa-circle-check mr-1"></i> This gate — admits vehicles
+                    @else
+                        Inactive
+                    @endif
+                </span>
+            </div>
 
-            <button id="scan-exit" type="button"
-                class="kiosk-btn group relative flex flex-col items-center justify-center gap-5 rounded-[2.5rem] bg-gradient-to-br from-rose-500 to-orange-500 p-10 text-white shadow-[0_25px_80px_-15px_rgba(244,63,94,.55)]">
-                <i
-                    class="fas fa-arrow-right-from-bracket kiosk-btn-icon text-7xl sm:text-8xl transition-transform duration-300 group-hover:scale-110"></i>
-                <span class="text-5xl sm:text-6xl font-black tracking-[0.2em] drop-shadow-lg">EXIT</span>
-                <span class="kiosk-btn-tag text-sm font-bold uppercase tracking-[0.35em] text-white/85">Leaving</span>
-            </button>
+            <div id="scan-exit" @class([
+                    'kiosk-gate relative flex flex-col items-center justify-center gap-5 rounded-[2.5rem] p-10 text-white',
+                    'bg-gradient-to-br from-rose-500 to-orange-500 shadow-[0_25px_80px_-15px_rgba(244,63,94,.55)]' => $exitActive,
+                    'bg-white/5 text-white/25 border border-white/10' => ! $exitActive,
+                ])>
+                <i @class([
+                        'fas fa-arrow-right-from-bracket kiosk-gate-icon text-7xl sm:text-8xl',
+                        'drop-shadow-lg' => $exitActive,
+                    ])></i>
+                <span class="text-5xl sm:text-6xl font-black tracking-[0.2em]">EXIT</span>
+                <span class="kiosk-gate-tag text-sm font-bold uppercase tracking-[0.35em]">
+                    @if ($exitActive)
+                        <i class="fas fa-circle-check mr-1"></i> This gate — releases vehicles
+                    @else
+                        Inactive
+                    @endif
+                </span>
+            </div>
         </main>
 
         <section class="rounded-3xl border border-white/15 bg-white/10 px-6 py-5 shadow-2xl backdrop-blur-xl">
@@ -112,37 +147,43 @@
             </h2>
             <ul id="recent-list" class="flex flex-col gap-1.5">
                 @forelse ($recentScans as $scan)
-                    <li
-                        class="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold">
-                        <i
-                            class="fas {{ $scan['status'] === 'parked' ? 'fa-arrow-right-to-bracket text-emerald-300' : 'fa-arrow-right-from-bracket text-rose-300' }}"></i>
-                        <span
-                            class="uppercase tracking-widest">{{ $scan['status'] === 'parked' ? 'Parked' : 'Exit' }}</span>
-                        @if ($scan['vehicle_type'] === 'two_wheeler')
-                            <i class="fas fa-motorcycle text-sm text-sky-300"></i>
-                        @elseif ($scan['vehicle_type'] === 'four_wheeler')
-                            <i class="fas fa-car text-sm text-teal-300"></i>
-                        @endif
-                        <span class="font-mono tracking-widest text-white/80">{{ $scan['vehicle_number'] }}</span>
-                        @if ($scan['driver_name'])
-                            <span class="text-white/60">{{ $scan['driver_name'] }}</span>
-                        @endif
-                        @if ($scan['rfid_id'])
-                            <span class="font-mono text-xs text-sky-300/80">Card {{ $scan['rfid_id'] }}</span>
-                        @endif
-                        @if ($scan['amount'] !== null)
-                            <span class="text-amber-300">₹{{ $scan['amount'] }}</span>
-                        @endif
-                        <span class="ml-auto text-xs text-white/40">{{ $scan['time']->format('d M, h:i A') }}</span>
-                    </li>
+                    @include('components.recent-scan-row', ['scan' => $scan])
                 @empty
                     <li class="text-sm italic text-white/40">Scans will appear here.</li>
                 @endforelse
             </ul>
+
+            {{--
+                The live-scan JS clones this and fills text only, so a live row can never
+                drift from the server-rendered one. Populated with every slot the row can
+                show; pushRecent removes the ones that don't apply.
+            --}}
+            <template id="recent-row-template">
+                <li data-card-code="" data-scan-status="" data-kiosk=""
+                    class="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold">
+                    <i data-slot="icon" class="fas fa-arrow-right-to-bracket text-emerald-300"></i>
+                    <span data-slot="status" class="uppercase tracking-widest">Parked</span>
+                    <i data-slot="type-icon" class="fas fa-car text-sm text-teal-300"></i>
+                    <span data-slot="vehicle-number" class="font-mono tracking-widest text-white/80"></span>
+                    <span data-slot="driver-name" class="text-white/60"></span>
+                    <span data-slot="card" class="font-mono text-xs text-sky-300/80">Card </span>
+                    <span data-slot="amount" class="text-amber-300"></span>
+                    <span data-slot="kiosk" class="font-mono text-[0.65rem] uppercase tracking-widest text-white/35"></span>
+                    <span data-slot="time" class="ml-auto text-xs text-white/40"></span>
+                </li>
+            </template>
         </section>
 
-        <footer class="mt-6 flex items-center justify-between text-xs text-white/50">
+        <footer class="mt-6 flex flex-wrap items-center justify-between gap-2 text-xs text-white/50">
             <span><i class="fas fa-bolt text-amber-400"></i> Live via Reverb</span>
+            @if ($kioskKey)
+                {{-- The binding is remembered for a year, so a shared machine needs a way
+                     back to the unbound state without clearing site data. --}}
+                <a href="{{ route('kiosk.forget') }}"
+                    class="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-white/60 transition hover:bg-white/15 hover:text-white">
+                    <i class="fas fa-link-slash mr-1"></i> Not this kiosk? Unbind
+                </a>
+            @endif
             <span>© {{ date('Y') }} ParkEasy</span>
         </footer>
     </div>
@@ -165,132 +206,68 @@
         </div>
     </div>
 
-    <div id="details-overlay"
-        class="fixed  inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-md">
-        <form id="details-form"
-            class="result-pop relative w-full md:w-1/2 max-w-lg rounded-[2.5rem] border border-white/20 bg-white/15 p-10 shadow-2xl backdrop-blur-2xl">
-            <button type="button" id="details-close"
+    {{-- Shown once, the first time a card is seen: it binds the card to a vehicle so every
+         later visit is resolved from the card alone. --}}
+    <div id="enrol-overlay"
+        class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-md p-4">
+        <div id="enrol-card"
+            class="result-pop relative w-full max-w-2xl rounded-[2.5rem] border border-amber-300/40 bg-slate-900/80 p-8 text-left shadow-2xl backdrop-blur-2xl sm:p-10">
+            <button type="button" id="enrol-close"
                 class="absolute right-6 top-6 text-2xl text-white/60 hover:text-white" aria-label="Close">
                 <i class="fas fa-xmark"></i>
             </button>
-            <div class="mb-6 text-center">
-                <i class="fas fa-clipboard-list text-6xl text-sky-300"></i>
-                <div class="mt-4 text-3xl font-black uppercase tracking-[0.2em]">Parking Details</div>
-                <div id="details-card-code"
-                    class="mt-2 font-mono text-xl font-bold tracking-[0.3em] text-emerald-300">
-                </div>
-            </div>
-            <div class="flex flex-col gap-4">
-                <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="driver-name">Driver
-                        name</label>
-                    <input id="driver-name" name="driver_name" type="text" required autocomplete="off"
-                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
-                </div>
-                <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60"
-                        for="vehicle-number">Vehicle registration number</label>
-                    <input id="vehicle-number" name="vehicle_number" type="text" required autocomplete="off"
-                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg uppercase tracking-widest text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
-                </div>
-                <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Vehicle type</label>
-                    <div class="mt-2 grid grid-cols-2 gap-3">
-                        <label class="cursor-pointer">
-                            <input type="radio" name="vehicle_type" value="two_wheeler" class="peer sr-only">
-                            <div class="rounded-xl border border-white/20 bg-white/10 p-3 text-center transition peer-checked:border-sky-400 peer-checked:bg-sky-500/20">
-                                <i class="fas fa-motorcycle text-2xl text-sky-300"></i>
-                                <span class="mt-1 block text-sm font-bold uppercase tracking-widest text-white/70 peer-checked:text-white">Two-Wheeler</span>
-                            </div>
-                        </label>
-                        <label class="cursor-pointer">
-                            <input type="radio" name="vehicle_type" value="four_wheeler" checked class="peer sr-only">
-                            <div class="rounded-xl border border-white/20 bg-white/10 p-3 text-center transition peer-checked:border-teal-400 peer-checked:bg-teal-500/20">
-                                <i class="fas fa-car-side text-2xl text-teal-300"></i>
-                                <span class="mt-1 block text-sm font-bold uppercase tracking-widest text-white/70 peer-checked:text-white">Four-Wheeler</span>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-                <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60"
-                        for="mobile-number">Mobile number</label>
-                    <input id="mobile-number" name="mobile_number" type="tel" required autocomplete="off"
-                        maxlength="10"
-                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg tracking-widest text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
-                </div>
-                <div id="details-error" class="hidden text-sm font-semibold text-rose-300"></div>
-                <button type="submit"
-                    class="mt-2 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 py-3 text-lg font-black uppercase tracking-[0.2em] text-white shadow-lg">
-                    Confirm parking
-                </button>
-            </div>
-        </form>
-    </div>
 
-    <div id="register-overlay"
-        class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-md">
-        <form id="register-form"
-            class="result-pop relative w-full max-w-lg rounded-[2.5rem] border border-white/20 bg-white/15 p-10 shadow-2xl backdrop-blur-2xl">
-            <button type="button" id="register-close"
-                class="absolute right-6 top-6 text-2xl text-white/60 hover:text-white" aria-label="Close">
-                <i class="fas fa-xmark"></i>
-            </button>
-            <div class="mb-6 text-center">
-                <i class="fas fa-id-card text-6xl text-amber-300"></i>
-                <div class="mt-4 text-3xl font-black uppercase tracking-[0.2em]">Register Card</div>
-                <div class="mt-2 text-sm text-white/60">This card isn't registered yet</div>
-                <div id="register-card-code" class="mt-2 font-mono text-xl font-bold tracking-[0.3em] text-amber-300">
-                </div>
+            <i class="fas fa-id-card text-5xl text-amber-300"></i>
+            <div class="mt-4 text-3xl font-black uppercase tracking-[0.15em] text-white">First time on this card</div>
+            <p class="mt-3 text-lg text-white/70">
+                Register this card to a vehicle. You only do this once — every later visit is automatic.
+            </p>
+
+            <div class="mt-5 flex items-center gap-3 rounded-2xl border border-white/15 bg-white/5 px-5 py-4">
+                <span class="text-sm uppercase tracking-widest text-white/50">Card</span>
+                <span id="enrol-code" class="font-mono text-2xl font-bold tracking-[0.3em] text-amber-300"></span>
             </div>
-            <div class="flex flex-col gap-4">
-                <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60"
-                        for="register-name">Driver's
-                        name</label>
-                    <input id="register-name" name="name" type="text" required autocomplete="off"
-                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
-                </div>
-                <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60"
-                        for="register-phone">Phone number</label>
-                    <input id="register-phone" name="phone" type="tel" required autocomplete="off"
-                        maxlength="10" pattern="[0-9]{10}" title="Enter a 10-digit phone number"
-                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg tracking-widest text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
-                </div>
-                <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60"
-                        for="register-vehicle-number">Vehicle registration number</label>
-                    <input id="register-vehicle-number" name="vehicle_number" type="text" required
-                        autocomplete="off"
-                        class="mt-1 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg uppercase tracking-widest text-white placeholder-white/40 outline-none focus:border-sky-400 focus:bg-white/15" />
-                </div>
-                <div>
-                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Vehicle type</label>
-                    <div class="mt-2 grid grid-cols-2 gap-3">
-                        <label class="cursor-pointer">
-                            <input type="radio" name="vehicle_type" value="two_wheeler" class="peer sr-only">
-                            <div class="rounded-xl border border-white/20 bg-white/10 p-3 text-center transition peer-checked:border-sky-400 peer-checked:bg-sky-500/20">
-                                <i class="fas fa-motorcycle text-2xl text-sky-300"></i>
-                                <span class="mt-1 block text-sm font-bold uppercase tracking-widest text-white/70 peer-checked:text-white">Two-Wheeler</span>
-                            </div>
-                        </label>
-                        <label class="cursor-pointer">
-                            <input type="radio" name="vehicle_type" value="four_wheeler" checked class="peer sr-only">
-                            <div class="rounded-xl border border-white/20 bg-white/10 p-3 text-center transition peer-checked:border-teal-400 peer-checked:bg-teal-500/20">
-                                <i class="fas fa-car-side text-2xl text-teal-300"></i>
-                                <span class="mt-1 block text-sm font-bold uppercase tracking-widest text-white/70 peer-checked:text-white">Four-Wheeler</span>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-                <div id="register-error" class="hidden text-sm font-semibold text-rose-300"></div>
-                <button type="submit"
-                    class="mt-2 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 py-3 text-lg font-black uppercase tracking-[0.2em] text-white shadow-lg">
-                    Register
+
+            <div class="mt-6 grid gap-4 sm:grid-cols-2">
+                <label class="block">
+                    <span class="text-sm uppercase tracking-widest text-white/60">Driver name</span>
+                    <input id="enrol-name" type="text" autocomplete="name" placeholder="e.g. Anil Kumar"
+                        class="mt-2 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg text-white placeholder-white/30 outline-none focus:border-amber-300/70">
+                </label>
+                <label class="block">
+                    <span class="text-sm uppercase tracking-widest text-white/60">Mobile number</span>
+                    <input id="enrol-mobile" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel"
+                        placeholder="10 digits"
+                        class="mt-2 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg text-white placeholder-white/30 outline-none focus:border-amber-300/70">
+                </label>
+                <label class="block">
+                    <span class="text-sm uppercase tracking-widest text-white/60">Vehicle number</span>
+                    <input id="enrol-vehicle" type="text" autocomplete="off" placeholder="e.g. KA01AB1234"
+                        class="mt-2 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-lg uppercase text-white placeholder-white/30 outline-none focus:border-amber-300/70">
+                </label>
+                <label class="block">
+                    <span class="text-sm uppercase tracking-widest text-white/60">Vehicle type</span>
+                    <select id="enrol-type"
+                        class="mt-2 w-full rounded-xl border border-white/20 bg-slate-800 px-4 py-3 text-lg text-white outline-none focus:border-amber-300/70">
+                        <option value="four_wheeler">Four wheeler</option>
+                        <option value="two_wheeler">Two wheeler</option>
+                    </select>
+                </label>
+            </div>
+
+            <div id="enrol-error" class="mt-4 hidden rounded-xl border border-rose-400/40 bg-rose-500/15 px-4 py-3 text-rose-100"></div>
+
+            <div class="mt-7 flex flex-col gap-3 sm:flex-row">
+                <button type="button" id="enrol-submit"
+                    class="flex-1 rounded-2xl bg-amber-400 px-6 py-4 text-lg font-black uppercase tracking-widest text-slate-900 transition hover:bg-amber-300 disabled:opacity-50">
+                    Register &amp; park
+                </button>
+                <button type="button" id="enrol-cancel"
+                    class="rounded-2xl border border-white/25 px-6 py-4 text-lg font-bold uppercase tracking-widest text-white/80 transition hover:bg-white/10">
+                    Cancel
                 </button>
             </div>
-        </form>
+        </div>
     </div>
 
     <style>
@@ -317,31 +294,14 @@
             animation-delay: -8s;
         }
 
-        .kiosk-btn {
-            transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
-            will-change: transform;
+        /* Only the live gate breathes; the inactive one stays inert so the operator can
+           tell at a glance which way this kiosk scans. */
+        .kiosk-gate:has(.fa-circle-check) {
+            animation: kioskPulse 2s ease-in-out infinite;
         }
 
-        .kiosk-btn:hover {
-            transform: translateY(-4px) scale(1.015);
-            filter: brightness(1.07);
-        }
-
-        .kiosk-btn:active {
-            transform: scale(0.96);
-        }
-
-        .kiosk-btn.armed {
-            box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.25), 0 30px 90px -12px rgba(255, 255, 255, 0.35);
-            animation: kioskPulse 1.5s ease-in-out infinite;
-        }
-
-        .kiosk-btn.armed .kiosk-btn-tag {
-            color: #ffe9a8;
-        }
-
-        .kiosk-btn.armed .kiosk-btn-icon {
-            animation: kioskWiggle 1.1s ease-in-out infinite;
+        .kiosk-gate:has(.fa-circle-check) .kiosk-gate-icon {
+            animation: kioskWiggle 1.6s ease-in-out infinite;
         }
 
         @keyframes kioskShift {
@@ -419,8 +379,8 @@
         (function() {
             'use strict';
 
-            const entryBtn = document.getElementById('scan-entry');
-            const exitBtn = document.getElementById('scan-exit');
+            const entryGate = document.getElementById('scan-entry');
+            const exitGate = document.getElementById('scan-exit');
             const chipEl = document.getElementById('scan-chip');
             const readout = document.getElementById('card-readout');
             const manual = document.getElementById('manual-card');
@@ -436,29 +396,36 @@
             const resultSub = document.getElementById('result-sub');
             const hintEl = document.getElementById('kiosk-hint');
             const recentList = document.getElementById('recent-list');
+            // Server-rendered row markup, cloned for every live scan. Keeping one copy
+            // in Blade is what stops live rows drifting out of step with the list.
+            const rowTemplate = document.getElementById('recent-row-template');
             const clockEl = document.getElementById('kiosk-clock');
             const dateEl = document.getElementById('kiosk-date');
-            const detailsOverlay = document.getElementById('details-overlay');
-            const detailsForm = document.getElementById('details-form');
-            const detailsCode = document.getElementById('details-card-code');
-            const detailsError = document.getElementById('details-error');
-            const detailsClose = document.getElementById('details-close');
-            const registerOverlay = document.getElementById('register-overlay');
-            const registerForm = document.getElementById('register-form');
-            const registerCode = document.getElementById('register-card-code');
-            const registerError = document.getElementById('register-error');
-            const registerClose = document.getElementById('register-close');
+            const enrolOverlay = document.getElementById('enrol-overlay');
+            const enrolClose = document.getElementById('enrol-close');
+            const enrolCancel = document.getElementById('enrol-cancel');
+            const enrolCode = document.getElementById('enrol-code');
+            const enrolName = document.getElementById('enrol-name');
+            const enrolMobile = document.getElementById('enrol-mobile');
+            const enrolVehicle = document.getElementById('enrol-vehicle');
+            const enrolType = document.getElementById('enrol-type');
+            const enrolSubmit = document.getElementById('enrol-submit');
+            const enrolErrorBox = document.getElementById('enrol-error');
 
-            let armed = null;
             let buffer = '';
             let busy = false;
             let overlayTimer = null;
-            let pendingRfid = null;
+            // Card held in the enrolment form while the attendant fills it in.
+            let enrolCard = null;
 
             // Parking lot number this kiosk is registered against (?kiosk=<key> in the URL).
             const kioskLot = @json($kioskLotNumber);
-            // Kiosk key from the URL; used to scope broadcasts and armed-mode to this kiosk.
+            // Kiosk key from the URL; used to scope broadcasts and attribute the scan.
             const kioskKey = @json($kioskKey);
+            // This kiosk's registered gate type. The kiosk decides entry vs exit, so the
+            // frontend only needs to know it to label the result. A kiosk with no type
+            // cannot scan at all - the backend refuses those.
+            const kioskType = @json($kioskType);
 
             function chipShow(label, bgClass) {
                 chipEl.classList.remove('hidden');
@@ -471,43 +438,11 @@
                 chipEl.classList.add('hidden');
             }
 
-            function setArmed(dir) {
-                armed = (armed === dir) ? null : dir;
-                entryBtn.classList.toggle('armed', armed === 'entry');
-                exitBtn.classList.toggle('armed', armed === 'exit');
-
-                if (armed === 'entry') {
-                    chipShow('Entry ready — scan card', 'bg-emerald-500');
-                } else if (armed === 'exit') {
-                    chipShow('Exit ready — scan card', 'bg-rose-500');
-                } else {
-                    chipHide();
-                }
-
-                if (armed) manual.focus();
-
-                // Tell the backend which direction is armed so the external RFID reader (which
-                // posts a scan without a 'type') honors the button pressed on this kiosk.
-                fetch('/api/kiosk-mode', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        mode: armed,
-                        kiosk: kioskKey,
-                    }),
-                }).catch(() => {
-                    /* ignore */
-                });
-            }
-
             function hint(text) {
                 hintEl.textContent = text;
                 hintEl.style.color = '#fcd34d';
                 setTimeout(() => {
-                    hintEl.textContent = 'Tap a direction, then scan your card';
+                    hintEl.textContent = 'Scan your card';
                     hintEl.style.color = '';
                 }, 2600);
             }
@@ -554,47 +489,120 @@
                 overlay.classList.remove('flex');
             }
 
-            function openDetailsForm(code, vehicleType) {
-                if (pendingRfid === code) return;
-                pendingRfid = code;
-                detailsForm.reset();
-                detailsError.classList.add('hidden');
-                detailsCode.textContent = code || '';
-                if (vehicleType === 'two_wheeler' || vehicleType === 'four_wheeler') {
-                    detailsForm.querySelector('input[name="vehicle_type"][value="' + vehicleType + '"]').checked = true;
+            function enrolError(text) {
+                if (!text) {
+                    enrolErrorBox.classList.add('hidden');
+                    enrolErrorBox.textContent = '';
+                    return;
                 }
-                detailsOverlay.classList.remove('hidden');
-                detailsOverlay.classList.add('flex');
-                document.getElementById('driver-name').focus();
+                enrolErrorBox.textContent = text;
+                enrolErrorBox.classList.remove('hidden');
             }
 
-            function closeDetailsForm() {
-                pendingRfid = null;
-                detailsOverlay.classList.add('hidden');
-                detailsOverlay.classList.remove('flex');
+            // A card we've never seen: collect the driver and vehicle once, then bind it.
+            function openEnrolment(code) {
+                // The scan response and the kiosk's own broadcast both report this, so the
+                // second call would wipe whatever the attendant has typed by then.
+                if (enrolCard === code) return;
+
+                enrolCard = code;
+                enrolError('');
+                enrolCode.textContent = code;
+                enrolName.value = '';
+                enrolMobile.value = '';
+                enrolVehicle.value = '';
+                enrolType.value = 'four_wheeler';
+                enrolOverlay.classList.remove('hidden');
+                enrolOverlay.classList.add('flex');
+                enrolName.focus();
             }
 
-            function openRegisterForm(code) {
-                if (pendingRfid === code) return;
-                pendingRfid = code;
-                registerForm.reset();
-                registerError.classList.add('hidden');
-                registerCode.textContent = code || '';
-                registerOverlay.classList.remove('hidden');
-                registerOverlay.classList.add('flex');
-                document.getElementById('register-name').focus();
+            function closeEnrolment() {
+                enrolCard = null;
+                enrolError('');
+                enrolOverlay.classList.add('hidden');
+                enrolOverlay.classList.remove('flex');
+                if (!busy) manual.focus();
             }
 
-            function closeRegisterForm() {
-                pendingRfid = null;
-                registerOverlay.classList.add('hidden');
-                registerOverlay.classList.remove('flex');
+            async function submitEnrolment() {
+                if (busy || !enrolCard) return;
+
+                const payload = {
+                    rfid_id: enrolCard,
+                    driver_name: enrolName.value.trim(),
+                    mobile_number: enrolMobile.value.trim(),
+                    vehicle_number: enrolVehicle.value.trim(),
+                    vehicle_type: enrolType.value,
+                    lot: kioskLot,
+                    kiosk: kioskKey,
+                };
+
+                // Catch the obvious slips locally so the attendant isn't bounced to a
+                // server error for a typo.
+                if (!payload.driver_name || !payload.vehicle_number) {
+                    enrolError('Driver name and vehicle number are required.');
+                    return;
+                }
+                if (!/^\d{10}$/.test(payload.mobile_number)) {
+                    enrolError('Mobile number must be 10 digits.');
+                    return;
+                }
+
+                busy = true;
+                manual.disabled = true;
+                enrolSubmit.disabled = true;
+                enrolError('');
+
+                try {
+                    const res = await fetch('/api/rfid-scan/enrol', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(payload),
+                    });
+
+                    let data = {};
+                    try {
+                        data = await res.json();
+                    } catch (e) {
+                        /* ignore */
+                    }
+
+                    if (data.success) {
+                        const card = enrolCard;
+                        closeEnrolment();
+                        showResult(data.status, card, data.time, null, data.amount, data.vehicle_number, data
+                            .driver_name);
+                        pushRecent(data.status, card, data.amount, data.vehicle_number, data.driver_name, data
+                            .entry_id, data.vehicle_type, kioskKey);
+                    } else {
+                        // Validation errors arrive keyed by field; show the first one.
+                        const first = data.errors ? Object.values(data.errors)[0] : null;
+                        enrolError(Array.isArray(first) ? first[0] : (data.error || 'Could not register this card'));
+                    }
+                } catch (e) {
+                    enrolError('Network error');
+                } finally {
+                    busy = false;
+                    manual.disabled = false;
+                    enrolSubmit.disabled = false;
+                }
             }
 
             // Seeded with the entries already rendered server-side so a live broadcast for one of them isn't duplicated.
             const shownEntryIds = new Set(@json($recentScans->map(fn($scan) => $scan['entry_id'] . ':' . $scan['status'])->values()));
 
-            function pushRecent(status, code, amount, vehicleNumber, driverName, entryId, vehicleType) {
+            // 'kiosk' is the kiosk that handled the scan. It differs per call site: the browser's own
+            // scans always come from the kiosk this page is tied to, but a reader broadcast
+            // names the kiosk that handled the scan.
+            // Exposed so the live-row contract can be tested: pushRecent is the one function
+            // that builds rows in JS, and it used to fall out of step with the Blade row.
+            window.__kioskTest = { pushRecent };
+
+            function pushRecent(status, code, amount, vehicleNumber, driverName, entryId, vehicleType, kiosk) {
                 // The API response and the 'rfid' broadcast both fire for the same scan; skip the repeat.
                 // An entry has separate parked/exit events, so key the dedup on both.
                 if (entryId != null) {
@@ -609,28 +617,59 @@
                     recentList.innerHTML = '';
                 }
 
-                const typeIcon = vehicleType === 'two_wheeler' ?
-                    '<i class="fas fa-motorcycle text-sm text-sky-300"></i>' :
-                    (vehicleType === 'four_wheeler' ? '<i class="fas fa-car text-sm text-teal-300"></i>' : '');
+                // Clone the server-rendered row rather than building markup here. The two copies used
+                // to drift: a field added to Blade never reached the live rows (the kiosk
+                // tag went missing that way). Filling slots in a clone cannot drift.
+                const li = rowTemplate.content.firstElementChild.cloneNode(true);
 
-                const li = document.createElement('li');
-                li.className =
-                    'flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold';
-                li.innerHTML = '<i class="fas ' +
-                    (status === 'parked' ? 'fa-arrow-right-to-bracket text-emerald-300' :
-                        'fa-arrow-right-from-bracket text-rose-300') +
-                    '"></i><span class="uppercase tracking-widest">' + (status === 'parked' ? 'Parked' : 'Exit') +
-                    '</span>' + typeIcon +
-                    '<span class="font-mono tracking-widest text-white/80">' + (vehicleNumber || code || '') +
-                    '</span>' + (driverName ? '<span class="text-white/60">' + driverName + '</span>' : '') +
-                    (code ? '<span class="font-mono text-xs text-sky-300/80">Card ' + code + '</span>' : '') +
-                    (amount != null ? '<span class="text-amber-300">₹' + amount + '</span>' : '') +
-                    '<span class="ml-auto text-xs text-white/40">' + new Date().toLocaleString([], {
-                        day: '2-digit',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    }) + '</span>';
+                const slot = (name) => li.querySelector('[data-slot="' + name + '"]');
+
+                // A slot that has no value for this scan is removed rather than left blank.
+                const fill = (name, value, fallback) => {
+                    const el = slot(name);
+                    if (!el) return;
+                    if (value === null || value === undefined || value === '') {
+                        el.remove();
+                        return;
+                    }
+                    el.textContent = fallback !== undefined ? fallback : String(value);
+                };
+
+                li.setAttribute('data-card-code', code || '');
+                li.setAttribute('data-scan-status', status);
+                li.setAttribute('data-kiosk', kiosk || '');
+
+                const parked = status === 'parked';
+                const icon = slot('icon');
+                if (icon) {
+                    icon.className = 'fas ' + (parked ?
+                        'fa-arrow-right-to-bracket text-emerald-300' :
+                        'fa-arrow-right-from-bracket text-rose-300');
+                }
+                const typeIcon = slot('type-icon');
+                if (typeIcon) {
+                    if (vehicleType === 'two_wheeler') {
+                        typeIcon.className = 'fas fa-motorcycle text-sm text-sky-300';
+                    } else if (vehicleType === 'four_wheeler') {
+                        typeIcon.className = 'fas fa-car text-sm text-teal-300';
+                    } else {
+                        typeIcon.remove();
+                    }
+                }
+                // Passed a fallback because 'Parked' and 'Exit' are never falsy, and
+                // fill() drops a slot that resolves to an empty string.
+                slot('status').textContent = parked ? 'Parked' : 'Exit';
+                fill('vehicle-number', vehicleNumber || code);
+                fill('driver-name', driverName);
+                fill('card', code ? 'Card ' + code : '');
+                fill('amount', amount != null ? '₹' + amount : '');
+                fill('kiosk', kiosk);
+                fill('time', new Date().toLocaleString([], {
+                    day: '2-digit',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }));
 
                 recentList.prepend(li);
                 while (recentList.children.length > 6) {
@@ -638,7 +677,7 @@
                 }
             }
 
-            async function submitScan(code, dir) {
+            async function submitScan(code) {
                 if (busy || !code) return;
                 if (!kioskLot) {
                     hint('This kiosk is not linked to a parking lot');
@@ -656,7 +695,6 @@
                         },
                         body: JSON.stringify({
                             rfid_id: code,
-                            type: dir,
                             lot: kioskLot,
                             kiosk: kioskKey,
                         }),
@@ -670,17 +708,19 @@
                     }
 
                     if (data.success) {
-                        if (data.status === 'details_required') {
-                            openDetailsForm(data.rfid_id, data.vehicle_type);
-                        } else {
-                            showResult(data.status, data.rfid_id, data.time, null, data.amount, data
-                                .vehicle_number, data.driver_name);
-                            pushRecent(data.status, data.rfid_id, data.amount, data.vehicle_number, data
-                                .driver_name, data.entry_id, data.vehicle_type);
+                        // A card we've never seen needs enrolling once before it can park.
+                        if (data.status === 'enrolment_required') {
+                            openEnrolment(data.rfid_id || code);
+                            return;
                         }
-                        // Stay armed so the attendant can keep scanning the same direction.
-                    } else if (data.status === 'unregistered') {
-                        openRegisterForm(data.rfid_id || code);
+                        // Otherwise the card identifies the vehicle, so a successful scan is
+                        // always a completed visit.
+                        showResult(data.status, data.rfid_id, data.time, null, data.amount, data.vehicle_number, data
+                            .driver_name);
+                        pushRecent(data.status, data.rfid_id, data.amount, data.vehicle_number, data.driver_name, data
+                            .entry_id, data.vehicle_type, kioskKey);
+                        // Refocus so the attendant can scan or type the next card.
+                        manual.focus();
                     } else {
                         showResult(null, code, null, data.error || 'Scan failed');
                     }
@@ -690,180 +730,44 @@
                     busy = false;
                     manual.disabled = false;
                     manual.value = '';
-                    if (armed) manual.focus();
+                    manual.focus();
                 }
             }
 
-            entryBtn.addEventListener('click', () => setArmed('entry'));
-            exitBtn.addEventListener('click', () => setArmed('exit'));
+            // The gate panes are indicators only. Attract the manual field once so the
+            // attendant can type a card straight after page load.
+            if (kioskType) manual.focus();
 
-            // Clicking the background (anything that isn't a control) un-arms
-            // the selected direction so an accidental tap doesn't arm the kiosk.
-            document.addEventListener('click', (e) => {
-                if (armed && !e.target.closest('button, a, select, input, label, nav')) {
-                    setArmed(null);
+            resultClose.addEventListener('click', () => closeResult());
+            enrolClose.addEventListener('click', () => closeEnrolment());
+            enrolCancel.addEventListener('click', () => closeEnrolment());
+            enrolSubmit.addEventListener('click', () => submitEnrolment());
+            // Enter anywhere in the form submits; the kiosk is keyboard-driven.
+            enrolOverlay.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') {
+                    e.preventDefault();
+                    submitEnrolment();
                 }
             });
 
-            registerClose.addEventListener('click', () => closeRegisterForm());
-            detailsClose.addEventListener('click', () => closeDetailsForm());
-            resultClose.addEventListener('click', () => closeResult());
-
-            // Close a form overlay when the click lands on the dimmed backdrop, not the form itself.
-            registerOverlay.addEventListener('click', (e) => {
-                if (e.target === registerOverlay) closeRegisterForm();
-            });
-            detailsOverlay.addEventListener('click', (e) => {
-                if (e.target === detailsOverlay) closeDetailsForm();
-            });
+            // Close the overlay when the click lands on the dimmed backdrop, not the card itself.
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) closeResult();
-            });
-
-            registerForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                if (!pendingRfid) return;
-
-                const name = document.getElementById('register-name').value.trim();
-                const phone = document.getElementById('register-phone').value.trim();
-                const vehicleNumber = document.getElementById('register-vehicle-number').value.trim()
-                    .toUpperCase();
-                const vehicleType = document.querySelector('#register-form input[name="vehicle_type"]:checked')
-                    .value;
-
-                if (!name) {
-                    registerError.textContent = 'Driver\'s name is required';
-                    registerError.classList.remove('hidden');
-                    return;
-                }
-                if (!/^[0-9]{10}$/.test(phone)) {
-                    registerError.textContent = 'Enter a valid 10-digit phone number';
-                    registerError.classList.remove('hidden');
-                    return;
-                }
-                if (!vehicleNumber) {
-                    registerError.textContent = 'Vehicle registration number is required';
-                    registerError.classList.remove('hidden');
-                    return;
-                }
-
-                const submitBtn = registerForm.querySelector('button[type="submit"]');
-                submitBtn.disabled = true;
-                registerError.classList.add('hidden');
-
-                try {
-                    const res = await fetch('/api/rfid-scan/register', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            rfid_id: pendingRfid,
-                            name: name,
-                            phone: phone,
-                            vehicle_number: vehicleNumber,
-                            vehicle_type: vehicleType,
-                            lot: kioskLot,
-                            kiosk: kioskKey,
-                        }),
-                    });
-
-                    let data = {};
-                    try {
-                        data = await res.json();
-                    } catch (e) {
-                        /* ignore */
-                    }
-
-                    if (data.success) {
-                        closeRegisterForm();
-                        showResult('parked', data.rfid_id, data.time, null, null, data.vehicle_number, data
-                            .driver_name);
-                        pushRecent('parked', data.rfid_id, null, data.vehicle_number, data.driver_name, data
-                            .entry_id, data.vehicle_type);
-                    } else {
-                        const firstError = data.errors ? Object.values(data.errors)[0]?.[0] : null;
-                        registerError.textContent = firstError || data.error ||
-                            'Could not register card, please try again';
-                        registerError.classList.remove('hidden');
-                    }
-                } catch (err) {
-                    registerError.textContent = 'Network error, please try again';
-                    registerError.classList.remove('hidden');
-                } finally {
-                    submitBtn.disabled = false;
-                }
-            });
-
-            detailsForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                if (!pendingRfid) return;
-
-                const submitBtn = detailsForm.querySelector('button[type="submit"]');
-                submitBtn.disabled = true;
-                detailsError.classList.add('hidden');
-
-                try {
-                    const res = await fetch('/api/rfid-scan/details', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            rfid_id: pendingRfid,
-                            driver_name: document.getElementById('driver-name').value
-                                .trim(),
-                            vehicle_number: document.getElementById('vehicle-number').value
-                                .trim().toUpperCase(),
-                            mobile_number: document.getElementById('mobile-number').value
-                                .trim(),
-                            vehicle_type: document.querySelector('#details-form input[name="vehicle_type"]:checked')
-                                .value,
-                            lot: kioskLot,
-                            kiosk: kioskKey,
-                        }),
-                    });
-
-                    let data = {};
-                    try {
-                        data = await res.json();
-                    } catch (e) {
-                        /* ignore */
-                    }
-
-                    if (data.success) {
-                        closeDetailsForm();
-                        showResult('parked', data.rfid_id, data.time, null, null, data.vehicle_number, data
-                            .driver_name);
-                        pushRecent('parked', data.rfid_id, null, data.vehicle_number, data.driver_name, data
-                            .entry_id, data.vehicle_type);
-                    } else {
-                        detailsError.textContent = data.error || 'Could not save details, please try again';
-                        detailsError.classList.remove('hidden');
-                    }
-                } catch (err) {
-                    detailsError.textContent = 'Network error, please try again';
-                    detailsError.classList.remove('hidden');
-                } finally {
-                    submitBtn.disabled = false;
-                }
             });
 
             manual.addEventListener('keydown', (e) => {
                 if (e.key !== 'Enter' || busy) return;
                 e.preventDefault();
                 const code = manual.value.trim().toUpperCase();
-                if (!armed) {
-                    hint('Press ENTRY or EXIT first');
+                if (!kioskType) {
+                    hint('This kiosk has no gate type');
                     return;
                 }
                 if (!code) {
                     hint('Type a card number');
                     return;
                 }
-                submitScan(code, armed);
+                submitScan(code);
             });
 
             document.addEventListener('keydown', (e) => {
@@ -873,19 +777,19 @@
                     const code = buffer.trim();
                     buffer = '';
                     readout.textContent = '';
-                    if (!armed) {
-                        hint('Press ENTRY or EXIT first');
+                    if (!kioskType) {
+                        hint('This kiosk has no gate type');
                         return;
                     }
                     if (!code) {
                         hint('No card scanned');
                         return;
                     }
-                    submitScan(code, armed);
+                    submitScan(code);
                 } else if (e.key === 'Escape') {
+                    // Clear a half-typed card without affecting the kiosk.
                     buffer = '';
                     readout.textContent = '';
-                    setArmed(null);
                 } else if (/^[A-Za-z0-9]$/.test(e.key)) {
                     buffer += e.key.toUpperCase();
                     readout.textContent = buffer;
@@ -921,20 +825,17 @@
             (function attachEchoListener() {
                 if (window.Echo && kioskKey) {
                     window.Echo.channel('kiosk.' + kioskKey).listen('RfidScanned', (e) => {
-                        if (e.status === 'unregistered') {
-                            openRegisterForm(e.rfid_id);
+                        // A scan from the hardware reader for a card we've never seen.
+                        if (e.status === 'enrolment_required') {
+                            openEnrolment(e.rfid_id);
                             return;
                         }
-                        if (e.status === 'details_required') {
-                            closeRegisterForm();
-                            openDetailsForm(e.rfid_id);
-                            return;
-                        }
-
                         showResult(e.status === 'error' ? null : e.status, e.rfid_id, new Date()
                             .toLocaleString(), e.message, e.amount, e.vehicle_number, e.driver_name);
+                        // This scan came from the reader, so the handling kiosk is this one,
+                        // not necessarily the kiosk this browser is bound to.
                         if (e.status === 'parked' || e.status === 'exit') pushRecent(e.status, e.rfid_id, e
-                            .amount, e.vehicle_number, e.driver_name, e.entry_id, e.vehicle_type);
+                            .amount, e.vehicle_number, e.driver_name, e.entry_id, e.vehicle_type, e.kiosk);
                     });
                     return;
                 }

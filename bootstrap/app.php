@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ResolveKioskBinding;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -14,7 +15,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Runs on every web request so a terminal stays bound to its kiosk across a
+        // browser restart, not just across in-session navigation.
+        $middleware->web(append: [
+            ResolveKioskBinding::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

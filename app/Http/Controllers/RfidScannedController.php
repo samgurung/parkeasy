@@ -7,251 +7,273 @@ use App\Models\Entry;
 use App\Models\Kiosk;
 use App\Models\ParkingLot;
 use App\Models\Vehicle;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class RfidScannedController extends Controller
 {
-    // Direction armed on the kiosk, used when the RFID reader posts a scan without a 'type'.
-    protected const ARMED_MODE_CACHE_KEY = 'kiosk:armed_mode';
-
     public function rfidScanned(Request $request)
     {
         // validate input
         $data = $request->validate([
             'rfid_id' => 'required|string',
-            'type' => 'sometimes|string|in:entry,exit',
             'lot' => 'required|integer|min:1',
-            'kiosk' => 'sometimes|string',
+            'kiosk' => 'required|string',
         ]);
 
-        $rfid = $data['rfid_id'];
-        // The external reader scans without a type; use whichever direction is armed on the
-        // kiosk. The mode stays armed for the whole shift and is scoped to the kiosk so one
-        // kiosk arming ENTRY never changes how another kiosk scans.
-        $type = $data['type'] ?? Cache::get($this->armedModeKey($data['kiosk'] ?? null));
+        // The card code is the only thing tying a scan to a registered vehicle, so it is
+        // normalised on every request. Readers differ on case (the ESP32 posts lowercase),
+        // and an unmatched card would otherwise look unregistered.
+        $rfid = $this->normaliseCard($data['rfid_id']);
 
         $lot = $this->lotFromNumber($data['lot']);
         if ($lot instanceof JsonResponse) {
             return $lot;
         }
+
+        // The kiosk is the gate, so it decides the direction: an entry kiosk only admits
+        // and an exit kiosk only releases. Nothing has to be selected before scanning.
+        $notLinked = $this->rejectIfKioskNotLinked($rfid, $data, $lot);
+        if ($notLinked) {
+            return $notLinked;
+        }
+
+        $kiosk = Kiosk::where('key', (string) $data['kiosk'])->first();
+
+        // A kiosk with no type can't gate traffic safely - admitting when it should release
+        // would let a vehicle leave without being charged.
+        if (! $kiosk->type) {
+            return $this->kioskNotConfigured($rfid, $kiosk->key, $lot);
+        }
+
+        // The card is permanently bound to a single vehicle. A card that has never been seen
+        // before is not an error - it is a first visit, so ask once and bind it for good.
+        $vehicle = Vehicle::where('rfid_id', $rfid)->first();
+
+        if ($kiosk->isExit()) {
+            return $this->handleExit($rfid, $vehicle, $lot, $kiosk->key);
+        }
+
+        return $this->handleEntry($rfid, $vehicle, $lot, $kiosk->key);
+    }
+
+    /**
+     * Refuse a scan from a kiosk that has not been told whether it admits or releases.
+     */
+    protected function kioskNotConfigured(string $rfid, string $kioskKey, ParkingLot $lot): JsonResponse
+    {
+        $message = 'This kiosk is not set to ENTRY or EXIT. Set it in the admin panel.';
+
+        broadcast(new RfidScanned($rfid, 'error', $message, null, null, null, null, $kioskKey, $lot->lot_number));
+
+        return response()->json([
+            'success' => false,
+            'error' => $message,
+        ], 422);
+    }
+
+    protected function handleEntry(string $rfid, ?Vehicle $vehicle, ParkingLot $lot, ?string $kioskKey): JsonResponse
+    {
+        // A card we have never seen is a first visit, not a failure. We have no rate class
+        // and no owner for it yet, so collect them once here and bind the card for good.
+        if (! $vehicle) {
+            broadcast(new RfidScanned($rfid, 'enrolment_required', null, null, null, null, null, $kioskKey, $lot->lot_number));
+
+            return response()->json([
+                'success' => true,
+                'status' => 'enrolment_required',
+                'rfid_id' => $rfid,
+                'lot' => $lot->lot_number,
+                'lot_name' => $lot->name,
+                'time' => now()->toDateTimeString(),
+            ]);
+        }
+
+        // Lock the card's row for the duration of the check-then-create. A double-tapped
+        // kiosk would otherwise pass the "already parked" test twice and open two visits
+        // for one vehicle, which would double-count it against occupancy.
+        return DB::transaction(function () use ($rfid, $vehicle, $lot, $kioskKey) {
+            Vehicle::whereKey($vehicle->id)->lockForUpdate()->first();
+
+            $activeEntry = $vehicle->activeEntry();
+
+            if ($activeEntry) {
+                $message = 'Vehicle is already parked';
+
+                broadcast(new RfidScanned($rfid, 'error', $message, null, null, $vehicle->vehicle_number, $vehicle->driver_name, $kioskKey, $lot->lot_number, $vehicle->vehicle_type));
+
+                return response()->json([
+                    'success' => false,
+                    'error' => $message,
+                ], 422);
+            }
+
+            $entry = Entry::create([
+                'rfid_id' => $rfid,
+                'vehicle_id' => $vehicle->id,
+                'entry_time' => now(),
+                'status' => 'parked',
+                'parking_lot_id' => $lot->id,
+                'entry_kiosk_key' => $kioskKey,
+            ]);
+
+            broadcast(new RfidScanned($rfid, 'parked', null, $entry->id, null, $vehicle->vehicle_number, $vehicle->driver_name, $kioskKey, $lot->lot_number, $vehicle->vehicle_type));
+
+            return response()->json([
+                'success' => true,
+                'status' => 'parked',
+                'entry_id' => $entry->id,
+                'rfid_id' => $rfid,
+                'vehicle_number' => $vehicle->vehicle_number,
+                'driver_name' => $vehicle->driver_name,
+                'vehicle_type' => $vehicle->vehicle_type,
+                'lot' => $lot->lot_number,
+                'lot_name' => $lot->name,
+                'time' => now()->toDateTimeString(),
+            ]);
+        });
+    }
+
+    /**
+     * Bind a card to its vehicle and park it in one step. This is the only time a driver
+     * is asked anything: the details live on the vehicle, so every later visit is
+     * resolved from the card alone.
+     */
+    public function enrol(Request $request)
+    {
+        $data = $request->validate([
+            'rfid_id' => ['required', 'string', 'max:255'],
+            'driver_name' => ['required', 'string', 'max:255'],
+            'vehicle_number' => ['required', 'string', 'max:255'],
+            'mobile_number' => ['required', 'string', 'size:10'],
+            'vehicle_type' => ['required', Rule::in([ParkingLot::VEHICLE_TWO_WHEELER, ParkingLot::VEHICLE_FOUR_WHEELER])],
+            'lot' => ['required', 'integer', 'min:1'],
+            'kiosk' => ['required', 'string'],
+        ]);
+
+        $lot = $this->lotFromNumber($data['lot']);
+        if ($lot instanceof JsonResponse) {
+            return $lot;
+        }
+
+        $rfid = $this->normaliseCard($data['rfid_id']);
 
         $notLinked = $this->rejectIfKioskNotLinked($rfid, $data, $lot);
         if ($notLinked) {
             return $notLinked;
         }
 
-        // Without a direction we can't tell an entry from an exit, so refuse the scan instead of guessing.
-        if (! $type) {
-            broadcast(new RfidScanned($rfid, 'error', 'Select ENTRY or EXIT before scanning', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
+        $kiosk = Kiosk::where('key', (string) $data['kiosk'])->first();
+
+        if (! $kiosk->type) {
+            return $this->kioskNotConfigured($rfid, $kiosk->key, $lot);
+        }
+
+        // Enrolment always parks the vehicle, so only an entry kiosk may do it. An exit
+        // kiosk has no visit to attach the card to.
+        if (! $kiosk->isEntry()) {
+            $message = 'Cards can only be enrolled at an ENTRY kiosk';
+
+            broadcast(new RfidScanned($rfid, 'error', $message, null, null, null, null, $kiosk->key, $lot->lot_number));
 
             return response()->json([
                 'success' => false,
-                'error' => 'Select ENTRY or EXIT before scanning',
+                'error' => $message,
             ], 422);
         }
 
-        $vehicle = Vehicle::where('rfid_id', $rfid)->first();
+        // The card may already have been enrolled at another kiosk between the scan that
+        // opened this form and the submit, so fall through to the normal entry path.
+        if ($vehicle = Vehicle::where('rfid_id', $rfid)->first()) {
+            return $this->handleEntry($rfid, $vehicle, $lot, $kiosk->key);
+        }
 
-        if (! $vehicle) {
-            // Exiting an unregistered card is always an error; only entry offers registration.
-            if ($type === 'exit') {
-                broadcast(new RfidScanned($rfid, 'error', 'Card not registered', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
+        return DB::transaction(function () use ($data, $rfid, $lot, $kiosk) {
+            try {
+                $vehicle = Vehicle::create([
+                    'rfid_id' => $rfid,
+                    'vehicle_number' => strtoupper(trim($data['vehicle_number'])),
+                    'vehicle_type' => $data['vehicle_type'],
+                    'driver_name' => trim($data['driver_name']),
+                    'mobile_number' => $data['mobile_number'],
+                    // This kiosk already knows which lot it serves, so the origin of the
+                    // registration is free to record. It does not scope the vehicle: the
+                    // card stays valid at every other lot.
+                    'registered_at_lot_id' => $lot->id,
+                ]);
+            } catch (QueryException $e) {
+                // Two kiosks enrolled the same card at once; the unique index caught it.
+                $vehicle = Vehicle::where('rfid_id', $rfid)->first();
 
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Card not registered',
-                ], 404);
+                if (! $vehicle) {
+                    throw $e;
+                }
             }
 
-            broadcast(new RfidScanned($rfid, 'unregistered', 'Card not registered', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
+            $entry = Entry::create([
+                'rfid_id' => $rfid,
+                'vehicle_id' => $vehicle->id,
+                'entry_time' => now(),
+                'status' => 'parked',
+                'parking_lot_id' => $lot->id,
+                'entry_kiosk_key' => $kiosk->key,
+            ]);
+
+            broadcast(new RfidScanned($rfid, 'parked', null, $entry->id, null, $vehicle->vehicle_number, $vehicle->driver_name, $kiosk->key, $lot->lot_number, $vehicle->vehicle_type));
 
             return response()->json([
-                'success' => false,
-                'status' => 'unregistered',
+                'success' => true,
+                'status' => 'parked',
+                'entry_id' => $entry->id,
                 'rfid_id' => $rfid,
+                'enrolled' => true,
+                'vehicle_number' => $vehicle->vehicle_number,
+                'driver_name' => $vehicle->driver_name,
+                'vehicle_type' => $vehicle->vehicle_type,
                 'lot' => $lot->lot_number,
                 'lot_name' => $lot->name,
-                'error' => 'Card not registered',
-            ], 404);
-        }
+                'time' => now()->toDateTimeString(),
+            ]);
+        });
+    }
 
-        $activeEntry = $vehicle->entries()
-            ->whereNull('exit_time')
-            ->where('status', 'parked')
-            ->latest()
-            ->first();
+    protected function handleExit(string $rfid, ?Vehicle $vehicle, ParkingLot $lot, ?string $kioskKey): JsonResponse
+    {
+        $activeEntry = $vehicle?->activeEntry() ?? $this->activeEntry($rfid);
 
-        if ($type === 'exit') {
-            if (! $activeEntry) {
-                broadcast(new RfidScanned($rfid, 'error', 'No active entry for this card', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
-
-                return response()->json([
-                    'success' => false,
-                    'error' => 'No active entry for this card',
-                ], 422);
-            }
-
-            // A parked card is bound to the lot where it entered; it can only be
-            // checked out from that lot's exit kiosk.
-            if ($activeEntry->parking_lot_id && $activeEntry->parking_lot_id !== $lot->id) {
-                broadcast(new RfidScanned($rfid, 'error', 'Vehicle is parked at a different lot', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
-
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Vehicle is parked at a different lot',
-                ], 422);
-            }
-
-            return $this->closeEntry($vehicle, $activeEntry, $rfid, $lot, $data['kiosk'] ?? null);
-        }
-
-        // $type === 'entry', but the card is still inside
-        if ($activeEntry) {
-            broadcast(new RfidScanned($rfid, 'error', 'Card is already inside', null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
+        if (! $activeEntry) {
+            broadcast(new RfidScanned($rfid, 'error', 'No active entry for this card', null, null, null, null, $kioskKey, $lot->lot_number));
 
             return response()->json([
                 'success' => false,
-                'error' => 'Card is already inside',
+                'error' => 'No active entry for this card',
             ], 422);
         }
 
-        // The entry is created only after the parking details are submitted.
-        broadcast(new RfidScanned($rfid, 'details_required', null, null, null, null, null, $data['kiosk'] ?? null, $data['lot']));
+        // A parked vehicle is bound to the lot where it entered; it can only be
+        // checked out from that lot's exit kiosk.
+        if ($activeEntry->parking_lot_id && $activeEntry->parking_lot_id !== $lot->id) {
+            broadcast(new RfidScanned($rfid, 'error', 'Vehicle is parked at a different lot', null, null, null, null, $kioskKey, $lot->lot_number));
 
-        return response()->json([
-            'success' => true,
-            'status' => 'details_required',
-            'rfid_id' => $rfid,
-            'lot' => $lot->lot_number,
-            'lot_name' => $lot->name,
-            'vehicle_type' => $vehicle->vehicle_type,
-            'time' => now()->toDateTimeString(),
-        ]);
-    }
-
-    public function registerVehicle(Request $request)
-    {
-        $data = $request->validate([
-            'rfid_id' => 'required|string|unique:vehicles,rfid_id',
-            'name' => 'required|string|max:255',
-            'phone' => 'required|digits:10',
-            'vehicle_number' => 'required|string|max:255',
-            'vehicle_type' => 'required|in:two_wheeler,four_wheeler',
-            'lot' => 'required|integer|min:1',
-            'kiosk' => 'sometimes|string',
-        ]);
-
-        $lot = $this->lotFromNumber($data['lot']);
-        if ($lot instanceof JsonResponse) {
-            return $lot;
-        }
-
-        $notLinked = $this->rejectIfKioskNotLinked($data['rfid_id'], $data, $lot);
-        if ($notLinked) {
-            return $notLinked;
-        }
-
-        $vehicle = Vehicle::create([
-            'rfid_id' => $data['rfid_id'],
-            'name' => $data['name'],
-            'phone' => $data['phone'],
-            'vehicle_type' => $data['vehicle_type'],
-        ]);
-
-        // Registration already captures driver, mobile and vehicle number, so park directly.
-        $entry = $vehicle->entries()->create([
-            'entry_time' => now(),
-            'driver_name' => $data['name'],
-            'mobile_number' => $data['phone'],
-            'vehicle_number' => strtoupper($data['vehicle_number']),
-            'vehicle_type' => $data['vehicle_type'],
-            'status' => 'parked',
-            'parking_lot_id' => $lot->id,
-        ]);
-
-        broadcast(new RfidScanned($vehicle->rfid_id, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name, $data['kiosk'] ?? null, $lot->lot_number, $entry->vehicle_type));
-
-        return response()->json([
-            'success' => true,
-            'status' => 'parked',
-            'entry_id' => $entry->id,
-            'rfid_id' => $vehicle->rfid_id,
-            'vehicle_number' => $entry->vehicle_number,
-            'driver_name' => $entry->driver_name,
-            'vehicle_type' => $entry->vehicle_type,
-            'lot' => $lot->lot_number,
-            'lot_name' => $lot->name,
-            'time' => now()->toDateTimeString(),
-        ]);
-    }
-
-    public function saveDetails(Request $request)
-    {
-        $data = $request->validate([
-            'rfid_id' => 'required|string|exists:vehicles,rfid_id',
-            'driver_name' => 'required|string|max:255',
-            'vehicle_number' => 'required|string|max:255',
-            'mobile_number' => 'required|string|max:10',
-            'vehicle_type' => 'required|in:two_wheeler,four_wheeler',
-            'lot' => 'required|integer|min:1',
-            'kiosk' => 'sometimes|string',
-        ]);
-
-        $lot = $this->lotFromNumber($data['lot']);
-        if ($lot instanceof JsonResponse) {
-            return $lot;
-        }
-
-        $notLinked = $this->rejectIfKioskNotLinked($data['rfid_id'], $data, $lot);
-        if ($notLinked) {
-            return $notLinked;
-        }
-
-        $vehicle = Vehicle::where('rfid_id', $data['rfid_id'])->firstOrFail();
-        $activeEntry = $vehicle->entries()
-            ->whereNull('exit_time')
-            ->where('status', 'parked')
-            ->latest()
-            ->first();
-
-        if ($activeEntry) {
             return response()->json([
                 'success' => false,
-                'error' => 'Card is already inside',
+                'error' => 'Vehicle is parked at a different lot',
             ], 422);
         }
 
-        // Remember the vehicle type on the card so the next visit can skip asking.
-        $vehicle->update(['vehicle_type' => $data['vehicle_type']]);
+        return $this->closeEntry($activeEntry, $rfid, $lot, $kioskKey);
+    }
 
-        $entry = $vehicle->entries()->create([
-            'entry_time' => now(),
-            'driver_name' => $data['driver_name'],
-            'vehicle_number' => $data['vehicle_number'],
-            'mobile_number' => $data['mobile_number'],
-            'vehicle_type' => $data['vehicle_type'],
-            'status' => 'parked',
-            'parking_lot_id' => $lot->id,
-        ]);
-
-        $rfid = $vehicle->rfid_id;
-
-        broadcast(new RfidScanned($rfid, 'parked', null, $entry->id, null, $entry->vehicle_number, $entry->driver_name, $data['kiosk'] ?? null, $lot->lot_number, $entry->vehicle_type));
-
-        return response()->json([
-            'success' => true,
-            'status' => 'parked',
-            'entry_id' => $entry->id,
-            'rfid_id' => $rfid,
-            'vehicle_number' => $entry->vehicle_number,
-            'driver_name' => $entry->driver_name,
-            'vehicle_type' => $entry->vehicle_type,
-            'lot' => $lot->lot_number,
-            'lot_name' => $lot->name,
-            'time' => now()->toDateTimeString(),
-        ]);
+    /**
+     * Card codes are matched case-insensitively everywhere they are stored, so a reader
+     * that posts lowercase still finds the vehicle the card is bound to.
+     */
+    protected function normaliseCard(string $rfid): string
+    {
+        return strtoupper(trim($rfid));
     }
 
     protected function lotFromNumber(int $lotNumber): JsonResponse|ParkingLot
@@ -301,7 +323,7 @@ class RfidScannedController extends Controller
         return null;
     }
 
-    protected function closeEntry(Vehicle $vehicle, Entry $activeEntry, string $rfid, ?ParkingLot $lot = null, ?string $kioskKey = null)
+    protected function closeEntry(Entry $activeEntry, string $rfid, ?ParkingLot $lot = null, ?string $kioskKey = null)
     {
         $exitTime = now();
         $amount = $this->calculateFee($activeEntry, $exitTime);
@@ -310,9 +332,14 @@ class RfidScannedController extends Controller
             'status' => 'exited',
             'exit_time' => $exitTime,
             'amount' => $amount,
+            // The exit kiosk is recorded separately from the entry kiosk, so each kiosk
+            // only lists the scans it actually handled.
+            'exit_kiosk_key' => $kioskKey,
         ]);
 
-        broadcast(new RfidScanned($rfid, 'exit', null, $activeEntry->id, $amount, $activeEntry->vehicle_number, $activeEntry->driver_name, $kioskKey, $lot?->lot_number ?? $activeEntry->parking_lot_id, $activeEntry->vehicle_type ?? $vehicle->vehicle_type));
+        $vehicle = $activeEntry->vehicle;
+
+        broadcast(new RfidScanned($rfid, 'exit', null, $activeEntry->id, $amount, $vehicle?->vehicle_number, $vehicle?->driver_name, $kioskKey, $lot?->lot_number ?? $activeEntry->parking_lot_id, $vehicle?->vehicle_type));
 
         return response()->json([
             'success' => true,
@@ -320,9 +347,9 @@ class RfidScannedController extends Controller
             'rfid_id' => $rfid,
             'amount' => $amount,
             'entry_id' => $activeEntry->id,
-            'vehicle_number' => $activeEntry->vehicle_number,
-            'driver_name' => $activeEntry->driver_name,
-            'vehicle_type' => $activeEntry->vehicle_type ?? $vehicle->vehicle_type,
+            'vehicle_number' => $vehicle?->vehicle_number,
+            'driver_name' => $vehicle?->driver_name,
+            'vehicle_type' => $vehicle?->vehicle_type,
             'time' => $exitTime->toDateTimeString(),
         ]);
     }
@@ -331,8 +358,8 @@ class RfidScannedController extends Controller
     {
         $hours = max(1, (int) ceil($entry->entry_time->diffInMinutes($exitTime) / 60));
 
-        // Legacy entries may predate vehicle types; default to the four-wheeler rate.
-        $vehicleType = $entry->vehicle_type ?? ParkingLot::VEHICLE_FOUR_WHEELER;
+        // Entries recorded before vehicle types existed fall back to the four-wheeler rate.
+        $vehicleType = $entry->vehicle?->vehicle_type ?? ParkingLot::VEHICLE_FOUR_WHEELER;
 
         $rate = $entry->parkingLot?->rateForVehicleType($vehicleType)
             ?? ($vehicleType === ParkingLot::VEHICLE_TWO_WHEELER ? 10.0 : 20.0);
@@ -340,27 +367,16 @@ class RfidScannedController extends Controller
         return $hours * $rate;
     }
 
-    public function setMode(Request $request)
+    /**
+     * The visit currently open for a card, if any. Falls back to the raw card code so a
+     * visit recorded against a since-deleted vehicle can still be checked out.
+     */
+    protected function activeEntry(string $rfid): ?Entry
     {
-        $data = $request->validate([
-            'mode' => 'nullable|string|in:entry,exit',
-            'kiosk' => 'sometimes|string',
-        ]);
-
-        $cacheKey = $this->armedModeKey($data['kiosk'] ?? null);
-
-        if (empty($data['mode'])) {
-            Cache::forget($cacheKey);
-        } else {
-            // Long TTL: the mode is meant to stay armed for an entire shift of scans, not a single one.
-            Cache::put($cacheKey, $data['mode'], now()->addHours(12));
-        }
-
-        return response()->json(['success' => true]);
-    }
-
-    protected function armedModeKey(?string $kioskKey): string
-    {
-        return $kioskKey ? 'kiosk:'.$kioskKey.':armed_mode' : self::ARMED_MODE_CACHE_KEY;
+        return Entry::where('rfid_id', $rfid)
+            ->whereNull('exit_time')
+            ->where('status', 'parked')
+            ->latest()
+            ->first();
     }
 }
