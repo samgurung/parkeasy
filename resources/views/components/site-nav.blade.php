@@ -3,7 +3,7 @@
      numbered steps mirror the lot -> floors/slots -> kiosks setup order. --}}
 
 <header class="sticky top-0 z-40 border-b border-white/10 bg-[#070312]/85 backdrop-blur-xl">
-    <div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+    <div class="flex h-16 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-10">
 
         {{-- Brand -> kiosk terminal --}}
         <a href="{{ route('home') }}" class="flex shrink-0 items-center gap-2.5"
@@ -96,7 +96,7 @@
     </div>
 
     {{-- Mobile menu --}}
-    <div id="site-nav-menu" class="hidden border-t border-white/10 px-4 py-4 lg:hidden">
+    <div id="site-nav-menu" class="hidden border-t border-white/10 px-4 py-4 sm:px-6 lg:hidden">
         <div class="mb-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">Live monitoring</div>
         <div class="grid gap-2">
             <x-nav-link route="lots.overview" icon="fas fa-chart-line" label="Lot Report" />
