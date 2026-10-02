@@ -49,12 +49,14 @@ class Home extends Component
     }
 
     /**
-     * The gates an operator may run, so the unbound page can offer them a choice.
+     * The gates an operator may run, so the unbound terminal can offer them a choice.
      *
-     * Empty for anyone else: staff reached this to preview one specific kiosk that has
-     * already resolved, so a list would be noise. An operator with two or more gates is the
-     * only real case - entry or exit is a genuine decision they have to make, and the answer
-     * has to be recorded in the binding rather than guessed at.
+     * Operators only, and that is a distinction of *page*, not of reach. Staff unbinding go
+     * to the admin kiosk list rather than here, because that is where they manage kiosks and
+     * navigate between gates; the picker is an operator's start-of-shift decision - entry or
+     * exit is a genuine choice, and the answer has to be recorded in the binding rather than
+     * guessed at. Staff have no such decision to make, and offering them the terminal's
+     * picker would blur a page that is deliberately not theirs.
      *
      * @return Collection<int, Kiosk>
      */

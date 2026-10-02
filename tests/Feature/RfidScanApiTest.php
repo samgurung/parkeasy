@@ -841,10 +841,11 @@ class RfidScanApiTest extends TestCase
         $this->get('/')->assertOk()->assertDontSee('Not this kiosk? Unbind');
     }
 
-    public function test_a_staff_unbind_lands_where_they_can_go_somewhere(): void
+    public function test_a_staff_unbind_lands_on_the_admin_kiosk_list(): void
     {
         $lot = $this->makeLot(self::LOT_A);
         $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+        $this->makeKiosk($lot, Kiosk::TYPE_EXIT, 'side-gate', 'Side Gate');
 
         Access::sync();
         $admin = $this->makeUser();
@@ -855,11 +856,12 @@ class RfidScanApiTest extends TestCase
 
         $this->get('/?kiosk=main-gate')->assertOk()->assertSee('Main Gate');
 
-        // A staff member is unbinding to get *off* the gate, not to choose another one. They
-        // are shown no picker, so the unbound terminal would be a warning with nowhere to go -
-        // they go to their own landing instead, which for a lot admin is the admin panel.
+        // Staff go to the admin kiosk list, not to the terminal. That page is where they
+        // manage kiosks and navigate between gates, and the terminal's picker is an
+        // operator's start-of-shift choice rather than a staff page - sending them there
+        // would show a lot admin a gate picker they are not meant to run gates from.
         $this->get(route('kiosk.forget'))
-            ->assertRedirect(route('admin.lots'));
+            ->assertRedirect(route('admin.kiosks'));
 
         $this->assertNull(session('kiosk_key'));
     }

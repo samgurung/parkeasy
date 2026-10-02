@@ -27,24 +27,22 @@ class ForgetKioskController
         // that is meant to clear it.
         ResolveKioskBinding::release($request);
 
-        $user = $request->user();
-
-        // A signed-out browser has no landing of its own, and the unbound terminal is as good
-        // a destination as any - it is where a guest lands now anyway.
-        if (! $user) {
-            return redirect()->route('home');
+        // Staff and operators are sent to different pages, because "unbind" means different
+        // things to them and the two pages are already distinct.
+        //
+        // An operator unbinds in order to *choose* which gate to run next, so they land on
+        // the unbound terminal, where the picker is offered. Staff are managing kiosks, so
+        // they land on the admin kiosk list - the page they navigate between gates from, and
+        // the one that answers "which kiosk is this?" with a list rather than a gate picker
+        // that is not theirs to use.
+        //
+        // Neither may be landingUrl(). For an operator with a single operable kiosk that
+        // returns /?kiosk=<key>, which would re-bind them one redirect later and turn the
+        // button into a silent no-op.
+        if ($request->user()?->canUseAdminPanel()) {
+            return redirect()->route('admin.kiosks');
         }
 
-        // An operator unbinds in order to *choose* - they are moving a terminal to another
-        // gate, and the unbound page is where the picker is offered. Staff are unbinding in
-        // order to get off the gate, and they are shown no picker, so sending them there would
-        // land them on a warning with nowhere to go. They go to their own landing instead.
-
-        // Note this deliberately is not landingUrl() for everyone: for an operator with a
-        // single operable kiosk that returns /?kiosk=<key>, which would re-bind them one
-        // redirect later and turn the button into a no-op.
-        return redirect()->to(
-            $user->operatesKiosks() ? route('home') : $user->landingUrl()
-        );
+        return redirect()->route('home');
     }
 }
