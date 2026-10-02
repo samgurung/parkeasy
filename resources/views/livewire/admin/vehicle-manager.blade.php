@@ -82,11 +82,6 @@
                         <i class="fas fa-plus mr-2"></i> Add Vehicle
                     </button>
                 </div>
-                <p class="text-xs text-white/40 lg:col-span-3">
-                    <i class="fas fa-circle-info mr-1 text-sky-400"></i>
-                    Once a card is registered, entry and exit happen automatically from the scan alone &mdash;
-                    the attendant is never asked for driver details at the gate.
-                </p>
             </form>
         </section>
 
