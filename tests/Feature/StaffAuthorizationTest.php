@@ -156,6 +156,27 @@ class StaffAuthorizationTest extends TestCase
             ->assertDontSee('Lot B');
     }
 
+    public function test_a_lot_admin_is_offered_a_link_back_to_the_page_they_land_on(): void
+    {
+        $this->actingAsLotAdmin([$this->lotA]);
+
+        // Sign-in sends a lot admin to /admin/lots and ParkingLotPolicy::viewAny lets them
+        // read it, so the nav has to offer it too. Gating the link on lots.manage instead
+        // meant they could arrive on the page but had no way to return to it.
+        //
+        // Asserted against the nav alone: other admin pages link to /admin/lots as well, so
+        // a whole-page assertion would pass even with the link removed from the nav.
+        $this->assertStringContainsString(
+            route('admin.lots'),
+            $this->navHtml()
+        );
+    }
+
+    public function test_a_guest_is_not_offered_the_admin_lots_link(): void
+    {
+        $this->assertStringNotContainsString(route('admin.lots'), $this->navHtml());
+    }
+
     public function test_a_lot_admin_sees_only_their_own_floors(): void
     {
         $this->floorIn($this->lotA, 'Ground A');
@@ -605,5 +626,10 @@ class StaffAuthorizationTest extends TestCase
 
         $this->assertFalse($user->administersLot($this->lotA));
         $this->assertTrue($user->administersLot($this->lotB));
+    }
+
+    private function navHtml(): string
+    {
+        return (string) $this->blade('<x-site-nav />');
     }
 }

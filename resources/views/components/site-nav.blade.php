@@ -23,7 +23,10 @@
             <span class="mx-2 h-6 w-px bg-white/15" role="separator"></span>
 
             {{-- Setup is staff-only, and each step is shown only if that capability is
-                 actually held - a lot admin sees Floors/Kiosks/Vehicles but not Lots. --}}
+                 actually held. A nav link is gated on being able to *open* the list, not
+                 on being able to administer the thing: a lot admin is sent to /admin/lots
+                 at sign-in and may read it, so gating that link on lots.manage left them
+                 able to land on the page with no way back to it. --}}
             @auth
                 @if (auth()->user()->canAny([
                         \App\Models\Access::MANAGE_LOTS,
@@ -34,7 +37,7 @@
                     <span class="mx-2 h-6 w-px bg-white/15" role="separator"></span>
 
                     <span class="mr-1 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">Setup</span>
-                    @can(\App\Models\Access::MANAGE_LOTS)
+                    @can('viewAny', \App\Models\ParkingLot::class)
                         <x-nav-link route="admin.lots" icon="fas fa-building" label="Lots" step="1" />
                     @endcan
                     @can(\App\Models\Access::MANAGE_FLOORS)
@@ -103,7 +106,7 @@
                 ]))
                 <div class="mb-2 mt-5 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">Setup – in order</div>
                 <div class="grid gap-2">
-                    @can(\App\Models\Access::MANAGE_LOTS)
+                    @can('viewAny', \App\Models\ParkingLot::class)
                         <x-nav-link route="admin.lots" label="Parking Lots" step="1" />
                     @endcan
                     @can(\App\Models\Access::MANAGE_FLOORS)
