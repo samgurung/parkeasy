@@ -7,15 +7,27 @@ use App\Livewire\LotOverview;
 use App\Livewire\SlotDashboard;
 use App\Models\ParkingFloor;
 use App\Models\ParkingLot;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Tests\Concerns\InteractsWithStaff;
 use Tests\TestCase;
 
 class ParkingSlotsPageTest extends TestCase
 {
-    use RefreshDatabase;
+    // These cover the existing admin behaviour for a fully-privileged user; the
+    // restricted-role cases live in StaffAuthorizationTest.
+    use InteractsWithStaff;
 
     private ?ParkingLot $cachedLot = null;
+
+    /**
+     * The /slots and /lots dashboards stay public on purpose, so authentication is opted
+     * into per test rather than applied in setUp.
+     */
+    private function asSuperAdmin(): void
+    {
+        $this->setUpStaff();
+        $this->actingAsSuperAdmin();
+    }
 
     private function lot(): ParkingLot
     {
@@ -85,6 +97,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_admin_floors_page_renders_configuration(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $this->makeFloor(0, 5);
 
         $this->get('/admin/floors')
@@ -95,6 +110,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_admin_floors_page_scopes_floors_to_a_lot(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $this->makeFloor(0, 2); // Main Lot floor, should be hidden when scoped.
 
         $otherLot = ParkingLot::create([
@@ -119,6 +137,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_admin_floors_page_lists_all_when_not_scoped(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $this->makeFloor(0, 2);
 
         $otherLot = ParkingLot::create([
@@ -141,6 +162,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_lot_manager_links_each_lot_to_its_floors(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $this->makeFloor(0, 2);
 
         $this->get('/admin/lots')
@@ -151,6 +175,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_floor_manager_keeps_lot_selected_after_adding_a_floor(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $lot = $this->lot();
 
         Livewire::test(FloorManager::class)
@@ -164,6 +191,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_floor_manager_stages_toggle_without_persisting(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $floor = $this->makeFloor(0, 6);
         $slot = $floor->slots()->where('slot_number', 4)->firstOrFail();
 
@@ -180,6 +210,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_floor_manager_confirm_applies_staged_type_changes(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $floor = $this->makeFloor(0, 6);
 
         // Designate a mid-row and an end slot as two-wheelers, not the first ones.
@@ -202,6 +235,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_floor_manager_second_tap_undoes_pending_change(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $floor = $this->makeFloor(0, 4);
         $slot = $floor->slots()->where('slot_number', 2)->firstOrFail();
 
@@ -219,6 +255,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_floor_manager_discard_drops_staged_changes(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $floor = $this->makeFloor(0, 4);
         $slot = $floor->slots()->where('slot_number', 1)->firstOrFail();
 
@@ -235,6 +274,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_section_filter_scopes_floors_to_a_lot(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $this->makeFloor(0, 2); // Main Lot floor
 
         $otherLot = ParkingLot::create([
@@ -259,6 +301,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_section_filter_and_add_form_lot_selection_are_independent(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         $this->makeFloor(0, 2);
 
         $otherLot = ParkingLot::create([
@@ -289,6 +334,9 @@ class ParkingSlotsPageTest extends TestCase
 
     public function test_section_filter_select_uses_live_binding(): void
     {
+        // /admin/* is behind authentication; the public dashboards are not.
+        $this->asSuperAdmin();
+
         // Livewire 4: bare "wire:model" / ".change" only sync client state and the
         // URL for #[Url] properties without sending a network request. The filter
         // relies on ".live" to actually re-render the floors list.
@@ -400,7 +448,7 @@ class ParkingSlotsPageTest extends TestCase
             ->assertSee('Main Lot')
             ->assertSee('Downtown Lot')
             ->assertSee('12 Market Street')
-            ->assertSee('% full');
+            ->assertSee('% available');
     }
 
     public function test_lot_report_hides_lots_without_floors_or_slots(): void

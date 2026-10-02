@@ -19,7 +19,7 @@
             </div>
             <p class="hidden max-w-xs text-right text-xs text-white/50 sm:block">
                 <i class="fas fa-circle-info mr-1 text-sky-400"></i>
-                Step 3 of 3 — attach each RFID kiosk to the parking lot it guards.
+                Step 3 of 4 — attach each RFID kiosk to the parking lot it guards.
             </p>
         </header>
 
@@ -28,7 +28,7 @@
             <h2 class="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-white/50 flex items-center gap-2">
                 <i class="fas fa-plus-circle text-sky-400"></i> Register New Kiosk
             </h2>
-            <form wire:submit="add" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <form wire:submit="add" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                     <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="name">Kiosk Name</label>
                     <input id="name" wire:model="name" type="text" placeholder="e.g. Main Gate A"
@@ -46,16 +46,43 @@
                     </select>
                     @error('lotId') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
                 </div>
+                <div>
+                    <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60" for="type">Gate Type</label>
+                    <div class="mt-1 grid grid-cols-2 gap-2" role="radiogroup" aria-labelledby="type-label">
+                        <button type="button" wire:click="$set('type', 'entry')" aria-pressed="{{ $type === 'entry' ? 'true' : 'false' }}"
+                                @class([
+                                    'rounded-xl border px-3 py-3 text-xs font-black uppercase tracking-widest transition',
+                                    'border-emerald-400 bg-emerald-500/25 text-emerald-200 ring-2 ring-emerald-400/60' => $type === 'entry',
+                                    'border-white/20 bg-white/10 text-white/50 hover:bg-white/15' => $type !== 'entry',
+                                ])>
+                            <i class="fas fa-arrow-right-to-bracket mr-1"></i> Entry
+                        </button>
+                        <button type="button" wire:click="$set('type', 'exit')" aria-pressed="{{ $type === 'exit' ? 'true' : 'false' }}"
+                                @class([
+                                    'rounded-xl border px-3 py-3 text-xs font-black uppercase tracking-widest transition',
+                                    'border-rose-400 bg-rose-500/25 text-rose-200 ring-2 ring-rose-400/60' => $type === 'exit',
+                                    'border-white/20 bg-white/10 text-white/50 hover:bg-white/15' => $type !== 'exit',
+                                ])>
+                            <i class="fas fa-arrow-right-from-bracket mr-1"></i> Exit
+                        </button>
+                    </div>
+                    <span id="type-label" class="sr-only">Gate type</span>
+                    @error('type') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                </div>
                 <div class="flex items-end">
                     <button type="submit"
                             class="w-full rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 px-6 py-3 text-sm font-black uppercase tracking-[0.2em] text-white shadow-lg hover:brightness-110 transition">
                         <i class="fas fa-plus mr-2"></i> Add Kiosk
                     </button>
                 </div>
-                <p class="text-xs text-white/40 sm:col-span-3">
+                <p class="text-xs text-white/40 sm:col-span-2 lg:col-span-4">
                     <i class="fas fa-circle-info mr-1 text-sky-400"></i>
-                    Open the kiosk at <span class="font-mono text-sky-300">/ ?kiosk=&lt;key&gt;</span> so it knows which parking lot to report
-                    entry and exit scans against. The RFID reader must send the same <span class="font-mono text-sky-300">lot</span> number.
+                    The gate type decides what a scan does: an
+                    <span class="font-semibold text-emerald-300">ENTRY</span> kiosk admits vehicles and is the only place a new
+                    card can be enrolled, while an <span class="font-semibold text-rose-300">EXIT</span> kiosk releases them and
+                    charges the fee. Drivers just scan — there is nothing to arm.
+                    Open the kiosk at <span class="font-mono text-sky-300">/ ?kiosk=&lt;key&gt;</span> so it knows which parking lot to
+                    report against. The RFID reader must send the same <span class="font-mono text-sky-300">lot</span> number.
                 </p>
             </form>
         </section>
@@ -71,7 +98,7 @@
 
                     @if ($editingId === $kiosk->id)
                         {{-- Inline edit form --}}
-                        <form wire:submit="save" class="grid grid-cols-1 gap-4 sm:grid-cols-2 items-end">
+                        <form wire:submit="save" class="grid grid-cols-1 gap-4 sm:grid-cols-3 items-end">
                             <div>
                                 <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Kiosk Name</label>
                                 <input wire:model="editName" type="text"
@@ -89,7 +116,29 @@
                                 </select>
                                 @error('editLotId') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
                             </div>
-                            <div class="sm:col-span-2 flex gap-3">
+                            <div>
+                                <label class="text-xs font-bold uppercase tracking-[0.2em] text-white/60">Gate Type</label>
+                                <div class="mt-1 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Gate type">
+                                    <button type="button" wire:click="$set('editType', 'entry')" aria-pressed="{{ $editType === 'entry' ? 'true' : 'false' }}"
+                                            @class([
+                                                'rounded-xl border px-2 py-2 text-xs font-black uppercase tracking-widest transition',
+                                                'border-emerald-400 bg-emerald-500/25 text-emerald-200 ring-2 ring-emerald-400/60' => $editType === 'entry',
+                                                'border-white/20 bg-white/10 text-white/50 hover:bg-white/15' => $editType !== 'entry',
+                                            ])>
+                                        <i class="fas fa-arrow-right-to-bracket mr-1"></i> Entry
+                                    </button>
+                                    <button type="button" wire:click="$set('editType', 'exit')" aria-pressed="{{ $editType === 'exit' ? 'true' : 'false' }}"
+                                            @class([
+                                                'rounded-xl border px-2 py-2 text-xs font-black uppercase tracking-widest transition',
+                                                'border-rose-400 bg-rose-500/25 text-rose-200 ring-2 ring-rose-400/60' => $editType === 'exit',
+                                                'border-white/20 bg-white/10 text-white/50 hover:bg-white/15' => $editType !== 'exit',
+                                            ])>
+                                        <i class="fas fa-arrow-right-from-bracket mr-1"></i> Exit
+                                    </button>
+                                </div>
+                                @error('editType') <p class="mt-1 text-xs text-rose-400">{{ $message }}</p> @enderror
+                            </div>
+                            <div class="sm:col-span-3 flex gap-3">
                                 <button type="submit"
                                         class="rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 px-5 py-2 text-sm font-black uppercase tracking-[0.2em] text-white shadow hover:brightness-110 transition">
                                     <i class="fas fa-check mr-1"></i> Save
@@ -112,6 +161,14 @@
                                     <div class="text-lg font-bold">{{ $kiosk->name }}</div>
                                     <div class="text-xs text-white/50">
                                         <span class="font-mono text-sky-300">KEY: {{ $kiosk->key }}</span>
+                                        &bull;
+                                        @if ($kiosk->type === 'entry')
+                                            <span class="font-bold text-emerald-300">ENTRY GATE</span>
+                                        @elseif ($kiosk->type === 'exit')
+                                            <span class="font-bold text-rose-300">EXIT GATE</span>
+                                        @else
+                                            <span class="font-bold text-amber-300">GATE TYPE NOT SET</span>
+                                        @endif
                                         @if ($kiosk->parkingLot)
                                             &bull;
                                             <span class="text-teal-300">PARKING LOT #{{ $kiosk->parkingLot->lot_number }}</span>
@@ -145,7 +202,7 @@
                                         class="rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-sky-300 hover:bg-sky-500/20 transition">
                                     <i class="fas fa-pen mr-1"></i> Edit
                                 </button>
-                                @if ($kiosk->parking_lot_id)
+                                @if ($kiosk->parking_lot_id && $canDetach)
                                     <button wire:click="delink({{ $kiosk->id }})"
                                             class="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-amber-300 hover:bg-amber-500/20 transition">
                                         <i class="fas fa-link-slash mr-1"></i> Delink

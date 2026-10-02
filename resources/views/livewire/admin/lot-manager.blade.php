@@ -29,7 +29,9 @@
             </p>
         </header>
 
-        {{-- Add lot form --}}
+        {{-- Add lot form: super admin only. Lots are site-wide configuration, so a lot
+             admin gets a read-only view of the lots they are attached to. --}}
+        @if ($canManageLots)
         <section class="rounded-3xl border border-white/15 bg-white/10 px-6 py-6 shadow-2xl backdrop-blur-xl mb-8">
             <h2 class="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-white/50 flex items-center gap-2">
                 <i class="fas fa-plus-circle text-sky-400"></i> Add New Parking Lot
@@ -86,17 +88,27 @@
                 </p>
             </form>
         </section>
+        @endif
 
         {{-- Lots list --}}
         <section>
             <h2 class="mb-3 text-xs font-bold uppercase tracking-[0.3em] text-white/50 flex items-center gap-2">
-                <i class="fas fa-building text-teal-400"></i> Configured Parking Lots
+                <i class="fas fa-building text-teal-400"></i>
+                {{ $canManageLots ? 'Configured Parking Lots' : 'Your Parking Lots' }}
             </h2>
+
+            @unless ($canManageLots)
+                <p class="mb-4 flex items-start gap-2 rounded-2xl border border-sky-400/25 bg-sky-500/10 px-5 py-3 text-sm text-sky-100">
+                    <i class="fas fa-circle-info mt-0.5 shrink-0"></i>
+                    You administer the lots listed here. Adding or changing lots is a super admin job,
+                    because a lot is site-wide configuration rather than local to you.
+                </p>
+            @endunless
 
             @forelse ($lots as $lot)
                 <div class="mb-4 rounded-2xl border border-white/15 bg-white/10 px-6 py-5 shadow-xl backdrop-blur-xl">
 
-                    @if ($editingId === $lot->id)
+                    @if ($canManageLots && $editingId === $lot->id)
                         {{-- Inline edit form --}}
                         <form wire:submit="save" class="grid grid-cols-1 gap-4 sm:grid-cols-2 items-end">
                             <div>
@@ -179,14 +191,16 @@
                                     title="Configure this lot's floors and slots">
                                     <i class="fas fa-layer-group mr-1"></i> Floors &amp; Slots
                                 </a>
-                                <button wire:click="edit({{ $lot->id }})"
-                                    class="rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-sky-300 hover:bg-sky-500/20 transition">
-                                    <i class="fas fa-pen mr-1"></i> Edit
-                                </button>
-                                <button wire:click="confirmDelete({{ $lot->id }})"
-                                    class="rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-rose-300 hover:bg-rose-500/20 transition">
-                                    <i class="fas fa-trash mr-1"></i> Delete
-                                </button>
+                                @if ($canManageLots)
+                                    <button wire:click="edit({{ $lot->id }})"
+                                        class="rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-sky-300 hover:bg-sky-500/20 transition">
+                                        <i class="fas fa-pen mr-1"></i> Edit
+                                    </button>
+                                    <button wire:click="confirmDelete({{ $lot->id }})"
+                                        class="rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-rose-300 hover:bg-rose-500/20 transition">
+                                        <i class="fas fa-trash mr-1"></i> Delete
+                                    </button>
+                                @endif
                             </div>
                         </div>
                     @endif

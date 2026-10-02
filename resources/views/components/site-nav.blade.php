@@ -22,13 +22,62 @@
 
             <span class="mx-2 h-6 w-px bg-white/15" role="separator"></span>
 
-            <span class="mr-1 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">Setup</span>
-            <x-nav-link route="admin.lots" icon="fas fa-building" label="Lots" step="1" />
-            <i class="fas fa-chevron-right text-[9px] text-white/25"></i>
-            <x-nav-link route="admin.floors" icon="fas fa-layer-group" label="Floors" step="2" />
-            <i class="fas fa-chevron-right text-[9px] text-white/25"></i>
-            <x-nav-link route="admin.kiosks" icon="fas fa-id-card" label="Kiosks" step="3" />
+            {{-- Setup is staff-only, and each step is shown only if that capability is
+                 actually held - a lot admin sees Floors/Kiosks/Vehicles but not Lots. --}}
+            @auth
+                @if (auth()->user()->canAny([
+                        \App\Models\Access::MANAGE_LOTS,
+                        \App\Models\Access::MANAGE_FLOORS,
+                        \App\Models\Access::MANAGE_KIOSKS,
+                        \App\Models\Access::VIEW_VEHICLES,
+                    ]))
+                    <span class="mx-2 h-6 w-px bg-white/15" role="separator"></span>
+
+                    <span class="mr-1 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">Setup</span>
+                    @can(\App\Models\Access::MANAGE_LOTS)
+                        <x-nav-link route="admin.lots" icon="fas fa-building" label="Lots" step="1" />
+                    @endcan
+                    @can(\App\Models\Access::MANAGE_FLOORS)
+                        <i class="fas fa-chevron-right text-[9px] text-white/25"></i>
+                        <x-nav-link route="admin.floors" icon="fas fa-layer-group" label="Floors" step="2" />
+                    @endcan
+                    @can(\App\Models\Access::MANAGE_KIOSKS)
+                        <i class="fas fa-chevron-right text-[9px] text-white/25"></i>
+                        <x-nav-link route="admin.kiosks" icon="fas fa-id-card" label="Kiosks" step="3" />
+                    @endcan
+                    @can(\App\Models\Access::VIEW_VEHICLES)
+                        <i class="fas fa-chevron-right text-[9px] text-white/25"></i>
+                        <x-nav-link route="admin.vehicles" icon="fas fa-car-side" label="Vehicles" step="4" />
+                    @endcan
+                @endif
+            @endauth
         </nav>
+
+        {{-- Staff sign-in / sign-out. The mobile menu carries the fuller version. --}}
+        <div class="flex shrink-0 items-center gap-2">
+            @auth
+                @if (auth()->user()->isSuperAdmin())
+                    <span class="hidden rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-300 sm:inline">
+                        Super admin
+                    </span>
+                @else
+                    <span class="hidden max-w-[10rem] truncate rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white/60 sm:inline"
+                          title="{{ auth()->user()->lots()->pluck('name')->join(', ') }}">
+                        Lot admin
+                    </span>
+                @endif
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button type="submit" class="rounded-lg border border-white/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/70 hover:bg-white/10">
+                        Sign out
+                    </button>
+                </form>
+            @else
+                <a href="{{ route('login') }}" class="rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-sky-300 hover:bg-sky-500/20">
+                    Sign in
+                </a>
+            @endauth
+        </div>
 
         {{-- Mobile hamburger --}}
         <button id="site-nav-toggle" type="button" aria-label="Toggle menu" aria-expanded="false"
@@ -45,17 +94,58 @@
             <x-nav-link route="slots.dashboard" icon="fas fa-map-location-dot" label="Slot Monitor" />
         </div>
 
-        <div class="mb-2 mt-5 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">Setup – in order</div>
-        <div class="grid gap-2">
-            <x-nav-link route="admin.lots" label="Parking Lots" step="1" />
-            <x-nav-link route="admin.floors" label="Floors & Slots" step="2" />
-            <x-nav-link route="admin.kiosks" label="Kiosks" step="3" />
-        </div>
+        @auth
+            @if (auth()->user()->canAny([
+                    \App\Models\Access::MANAGE_LOTS,
+                    \App\Models\Access::MANAGE_FLOORS,
+                    \App\Models\Access::MANAGE_KIOSKS,
+                    \App\Models\Access::VIEW_VEHICLES,
+                ]))
+                <div class="mb-2 mt-5 text-[10px] font-black uppercase tracking-[0.25em] text-white/35">Setup – in order</div>
+                <div class="grid gap-2">
+                    @can(\App\Models\Access::MANAGE_LOTS)
+                        <x-nav-link route="admin.lots" label="Parking Lots" step="1" />
+                    @endcan
+                    @can(\App\Models\Access::MANAGE_FLOORS)
+                        <x-nav-link route="admin.floors" label="Floors & Slots" step="2" />
+                    @endcan
+                    @can(\App\Models\Access::MANAGE_KIOSKS)
+                        <x-nav-link route="admin.kiosks" label="Kiosks" step="3" />
+                    @endcan
+                    @can(\App\Models\Access::VIEW_VEHICLES)
+                        <x-nav-link route="admin.vehicles" label="Vehicles & Cards" step="4" />
+                    @endcan
+                </div>
 
-        <p class="mt-4 flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/50">
-            <i class="fas fa-circle-info mt-0.5 text-sky-300"></i>
-            <span>Set up in order: add parking lots, then floors &amp; slot counts, then attach RFID kiosks to lots.</span>
-        </p>
+                <p class="mt-4 flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/50">
+                    <i class="fas fa-circle-info mt-0.5 text-sky-300"></i>
+                    <span>Set up in order: add parking lots, then floors &amp; slot counts, then attach RFID kiosks to lots,
+                        then bind each RFID card to its vehicle.</span>
+                </p>
+            @endif
+
+            {{-- Who is signed in, and the way out. --}}
+            <div class="mt-5 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                <div class="min-w-0">
+                    <div class="truncate text-sm font-bold text-white">{{ auth()->user()->name }}</div>
+                    <div class="truncate text-[11px] text-white/45">
+                        {{ auth()->user()->isSuperAdmin() ? 'Super admin — all lots' : 'Lot admin — '.auth()->user()->lots()->pluck('name')->join(', ') }}
+                    </div>
+                </div>
+                <form method="POST" action="{{ route('logout') }}" class="shrink-0">
+                    @csrf
+                    <button type="submit" class="rounded-lg border border-white/20 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-white/70 hover:bg-white/10">
+                        Sign out
+                    </button>
+                </form>
+            </div>
+        @else
+            <div class="mt-5">
+                <a href="{{ route('login') }}" class="block rounded-xl border border-sky-400/40 bg-sky-500/10 px-4 py-3 text-center text-xs font-bold uppercase tracking-widest text-sky-300">
+                    <i class="fas fa-user-shield mr-1"></i> Staff sign in
+                </a>
+            </div>
+        @endauth
     </div>
 </header>
 

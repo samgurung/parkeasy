@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\Entry;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -57,6 +57,23 @@ class ParkingLot extends Model
     public function parkedEntries(): HasMany
     {
         return $this->hasMany(Entry::class)->where('status', 'parked');
+    }
+
+    /**
+     * Restrict a lot query to the lots this user administers.
+     *
+     * A super admin's clause is dropped entirely, so they see the whole portfolio without
+     * every call site needing to special-case them. A lot admin with no assignment gets
+     * `where 0 = 1` rather than an unfiltered list - failing closed is the whole point.
+     *
+     * @param  Builder<ParkingLot>  $query
+     * @return Builder<ParkingLot>
+     */
+    public function scopeAdministeredBy(Builder $query, User $user): Builder
+    {
+        $ids = $user->administeredLotIds();
+
+        return $ids === null ? $query : $query->whereKey($ids);
     }
 
     /**

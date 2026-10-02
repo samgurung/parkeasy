@@ -1,13 +1,14 @@
 {{-- Mini workflow stepper shown on the admin setup pages. --}}
-{{-- @props(['current' => 'lots'|'floors'|'kiosks']) --}}
+{{-- @props(['current' => 'lots'|'floors'|'kiosks'|'vehicles']) --}}
 
 @props(['current' => 'lots'])
 
 @php
     $steps = [
-        'lots'   => ['route' => 'admin.lots',   'label' => 'Lots'],
-        'floors' => ['route' => 'admin.floors', 'label' => 'Floors & Slots'],
-        'kiosks' => ['route' => 'admin.kiosks', 'label' => 'Kiosks'],
+        'lots'    => ['route' => 'admin.lots',    'label' => 'Lots'],
+        'floors'  => ['route' => 'admin.floors',  'label' => 'Floors & Slots'],
+        'kiosks'  => ['route' => 'admin.kiosks',  'label' => 'Kiosks'],
+        'vehicles' => ['route' => 'admin.vehicles', 'label' => 'Vehicles & Cards'],
     ];
 @endphp
 

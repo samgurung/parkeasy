@@ -2,9 +2,11 @@
 
 namespace App\Livewire\Admin;
 
+use App\Livewire\Concerns\ScopesToAdministeredLots;
 use App\Models\ParkingFloor;
 use App\Models\ParkingLot;
 use App\Models\ParkingSlot;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Rule;
 use Livewire\Attributes\Url;
@@ -12,6 +14,8 @@ use Livewire\Component;
 
 class FloorManager extends Component
 {
+    use ScopesToAdministeredLots;
+
     // ── Add-floor form ────────────────────────────────────────────────────────
 
     #[Rule('required|exists:parking_lots,id')]
@@ -52,9 +56,20 @@ class FloorManager extends Component
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
+    public function mount(): void
+    {
+        Gate::authorize('viewAny', ParkingFloor::class);
+    }
+
     public function render(): View
     {
-        $lots = ParkingLot::withCount('floors')->orderBy('lot_number')->get();
+        $lots = $this->administeredLots()->withCount('floors')->get();
+        // A lot admin arriving with ?lot=<someone else's lot> is simply not scoped to
+        // anything, rather than being shown the lot and failing later.
+        if ($this->filterLotId !== null && ! $lots->contains('id', $this->filterLotId)) {
+            $this->filterLotId = null;
+        }
+
         $selectedLot = $lots->firstWhere('id', $this->filterLotId);
 
         $floors = ParkingFloor::with(['lot'])->with(['slots' => fn ($q) => $q->select([
@@ -64,6 +79,9 @@ class FloorManager extends Component
             'slots as occupied_slots_count' => fn ($q) => $q->where('is_occupied', true),
             'slots as two_wheeler_slots_count' => fn ($q) => $q->where('vehicle_type', ParkingLot::VEHICLE_TWO_WHEELER),
         ])
+            // Unfiltered, this must still be narrowed to the admin's own lots - otherwise
+            // a lot admin simply clears the ?lot= scope to see every layout on the site.
+            ->whereIn('parking_lot_id', $this->administeredLots()->select('parking_lots.id'))
             ->when($this->filterLotId, fn ($q) => $q->where('parking_lot_id', $this->filterLotId))
             ->orderBy('floor_number')
             ->get();
@@ -100,6 +118,8 @@ class FloorManager extends Component
 
         $slot = ParkingSlot::findOrFail($slotId);
 
+        Gate::authorize('update', $slot);
+
         $this->pendingTypeChanges[$slotId] = $slot->vehicle_type === ParkingLot::VEHICLE_TWO_WHEELER
             ? ParkingLot::VEHICLE_FOUR_WHEELER
             : ParkingLot::VEHICLE_TWO_WHEELER;
@@ -113,7 +133,13 @@ class FloorManager extends Component
         }
 
         foreach ($this->pendingTypeChanges as $slotId => $type) {
-            ParkingSlot::where('id', $slotId)->update(['vehicle_type' => $type]);
+            $slot = ParkingSlot::findOrFail($slotId);
+
+            // Re-checked at write time, not only when the change was staged: the staged id
+            // is attacker-controlled input, and a slot may have moved lot in between.
+            Gate::authorize('update', $slot);
+
+            $slot->update(['vehicle_type' => $type]);
         }
 
         $this->pendingTypeChanges = [];
@@ -129,14 +155,23 @@ class FloorManager extends Component
 
     public function addFloor(): void
     {
+        Gate::authorize('create', ParkingFloor::class);
+
         $this->validate([
             'lotId' => 'required|exists:parking_lots,id',
             'name' => 'required|string|max:100',
             'slotCount' => 'required|integer|min:1|max:500',
         ]);
 
+        // "exists" only proves the lot exists, not that this admin may add a floor to it.
+        abort_unless(
+            $lotId = $this->authorizedLotId($this->lotId),
+            403,
+            'You can only add floors to the lots you administer.'
+        );
+
         // Auto-assign the next free floor number within the chosen lot.
-        $nextFloor = ParkingFloor::where('parking_lot_id', $this->lotId)
+        $nextFloor = ParkingFloor::where('parking_lot_id', $lotId)
             ->max('floor_number') + 1;
 
         $floor = ParkingFloor::create([
@@ -159,6 +194,7 @@ class FloorManager extends Component
     public function startEdit(int $id): void
     {
         $floor = ParkingFloor::findOrFail($id);
+        Gate::authorize('update', $floor);
         $this->editingId = $id;
         $this->editLotId = $floor->parking_lot_id;
         $this->editName = $floor->name;
@@ -174,9 +210,18 @@ class FloorManager extends Component
         ]);
 
         $floor = ParkingFloor::findOrFail($this->editingId);
+        Gate::authorize('update', $floor);
+
+        // Moving a floor to another lot is two separate permissions in one action: the lot
+        // it is leaving, and the lot it is being moved into. Both must be the admin's.
+        abort_unless(
+            $newLotId = $this->authorizedLotId($this->editLotId),
+            403,
+            'You can only move floors into the lots you administer.'
+        );
 
         $floor->update([
-            'parking_lot_id' => $this->editLotId,
+            'parking_lot_id' => $newLotId,
             'name' => trim($this->editName),
             'slot_count' => (int) $this->editSlotCount,
         ]);
@@ -198,6 +243,7 @@ class FloorManager extends Component
 
     public function confirmDelete(int $id): void
     {
+        Gate::authorize('delete', ParkingFloor::findOrFail($id));
         $this->confirmDeleteId = $id;
     }
 
@@ -208,7 +254,9 @@ class FloorManager extends Component
 
     public function deleteFloor(): void
     {
-        ParkingFloor::findOrFail($this->confirmDeleteId)->delete();
+        $floor = ParkingFloor::findOrFail($this->confirmDeleteId);
+        Gate::authorize('delete', $floor);
+        $floor->delete();
         $this->confirmDeleteId = null;
     }
 }
