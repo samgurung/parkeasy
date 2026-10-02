@@ -49,7 +49,9 @@ class Login extends Component
         // off the request, which keeps it working under Livewire's synthetic requests.
         session()->regenerate();
 
-        $this->redirectIntended(default: route('admin.lots'));
+        // Where they land is a property of the role, not of the form: staff belong in the
+        // panel, an operator belongs at their gate. See User::landingUrl().
+        $this->redirectIntended(default: request()->user()->landingUrl());
     }
 
     public function render(): View

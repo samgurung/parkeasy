@@ -57,7 +57,7 @@ class PermissionCacheSeedingTest extends TestCase
         $this->seedLikeDbSeed();
 
         $this->assertSame(ParkingLot::count(), User::role(User::ROLE_LOT_ADMIN)->count());
-        $this->assertSame(9, Permission::count());
+        $this->assertSame(count(Access::allPermissions()), Permission::count());
     }
 
     public function test_a_permission_written_during_seeding_is_immediately_resolvable_by_name(): void
@@ -80,7 +80,7 @@ class PermissionCacheSeedingTest extends TestCase
         $this->seedLikeDbSeed();
         $this->seedLikeDbSeed();
 
-        $this->assertSame(9, Permission::count(), 'Re-seeding must not duplicate permissions.');
+        $this->assertSame(count(Access::allPermissions()), Permission::count(), 'Re-seeding must not duplicate permissions.');
         $this->assertSame(ParkingLot::count(), User::role(User::ROLE_LOT_ADMIN)->count());
     }
 
@@ -94,7 +94,7 @@ class PermissionCacheSeedingTest extends TestCase
 
         $this->seedLikeDbSeed();
 
-        $this->assertSame(9, Permission::count());
+        $this->assertSame(count(Access::allPermissions()), Permission::count());
     }
 
     public function test_the_role_permission_links_are_actually_written(): void
@@ -137,7 +137,13 @@ class PermissionCacheSeedingTest extends TestCase
         Access::sync();
         Access::sync();
 
-        $this->assertSame(9, Permission::count());
-        $this->assertSame(2, Role::count());
+        $this->assertSame(count(Access::allPermissions()), Permission::count());
+
+        // Named rather than counted, so a role added to the catalogue fails this until the
+        // expectation is updated - a bare count would just drift.
+        $this->assertSame(
+            [User::ROLE_LOT_ADMIN, User::ROLE_OPERATOR, User::ROLE_SUPER_ADMIN],
+            Role::orderBy('name')->pluck('name')->all(),
+        );
     }
 }

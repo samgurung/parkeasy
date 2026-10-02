@@ -50,6 +50,24 @@ trait InteractsWithStaff
         return $user->fresh();
     }
 
+    /**
+     * Gate staff attached to the given lots. Like a lot admin, they are scoped by the
+     * `user_parking_lot` pivot - `administeredLotIds()` only exempts the super admin, so an
+     * operator inherits lot scoping from existing code rather than needing its own.
+     *
+     * @param  array<int, int|ParkingLot>  $lots
+     */
+    protected function operator(array $lots = [], array $attributes = []): User
+    {
+        $user = $this->makeUser($attributes, 'Operator');
+        $user->assignRole(User::ROLE_OPERATOR);
+        $user->lots()->sync(
+            collect($lots)->map(fn ($lot) => $lot instanceof ParkingLot ? $lot->id : $lot)->all()
+        );
+
+        return $user->fresh();
+    }
+
     protected function actingAsSuperAdmin(): User
     {
         $user = $this->superAdmin();
@@ -64,6 +82,17 @@ trait InteractsWithStaff
     protected function actingAsLotAdmin(array $lots = [], array $attributes = []): User
     {
         $user = $this->lotAdmin($lots, $attributes);
+        $this->actingAs($user);
+
+        return $user;
+    }
+
+    /**
+     * @param  array<int, int|ParkingLot>  $lots
+     */
+    protected function actingAsOperator(array $lots = [], array $attributes = []): User
+    {
+        $user = $this->operator($lots, $attributes);
         $this->actingAs($user);
 
         return $user;

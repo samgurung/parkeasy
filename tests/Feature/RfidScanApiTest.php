@@ -6,6 +6,7 @@ use App\Http\Middleware\ResolveKioskBinding;
 use App\Models\Entry;
 use App\Models\Kiosk;
 use App\Models\ParkingLot;
+use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -67,6 +68,23 @@ class RfidScanApiTest extends TestCase
             'key' => $key,
             'type' => $type,
             'parking_lot_id' => $lot->id,
+        ]);
+    }
+
+    /**
+     * Just an authenticated user. These tests are about who the binding belongs to, not
+     * about what a given role may see, so no permission is granted on purpose - an
+     * account with none is still a signed-in browser.
+     */
+    private function makeUser(): User
+    {
+        static $sequence = 0;
+        $sequence++;
+
+        return User::create([
+            'name' => 'Staff',
+            'email' => "staff{$sequence}@parkeasy.test",
+            'password' => 'password',
         ]);
     }
 
@@ -596,6 +614,136 @@ class RfidScanApiTest extends TestCase
         $this->get('/')
             ->assertOk()
             ->assertSee('This kiosk is not linked to a parking lot');
+    }
+
+    public function test_a_signed_in_browser_is_not_given_a_long_lived_binding(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+
+        $this->actingAs($this->makeUser());
+
+        // Staff reach a kiosk by clicking its link in the admin kiosk list, so the preview
+        // still has to render. But a laptop is not gate hardware: a year-long cookie would
+        // outlive the login and dump whoever used that machine back onto a gate view after
+        // signing out. The session holds the selection instead, which ends at the logout.
+        $this->get('/?kiosk=main-gate')
+            ->assertOk()
+            ->assertSee('Main Gate')
+            ->assertSee('PARKING LOT #'.self::LOT_A)
+            ->assertCookieExpired(ResolveKioskBinding::COOKIE_NAME);
+
+        $this->assertSame('main-gate', session('kiosk_key'));
+    }
+
+    public function test_a_signed_in_browser_is_released_from_a_binding_it_already_had(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+
+        // Machines bound before the role existed still carry the cookie, so signing in has
+        // to clear it rather than merely decline to refresh it - otherwise those laptops stay
+        // pinned to the gate for the full year. Clearing the cookie must not cost the signed
+        // in user the gate they are actually on, which is why this clears the cookie alone.
+        $this->withCookie(ResolveKioskBinding::COOKIE_NAME, 'main-gate');
+
+        $this->actingAs($this->makeUser());
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Main Gate')
+            ->assertCookieExpired(ResolveKioskBinding::COOKIE_NAME);
+
+        $this->assertSame('main-gate', session('kiosk_key'));
+    }
+
+    public function test_a_signed_in_browser_keeps_its_kiosk_after_navigating_away(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+
+        $this->actingAs($this->makeUser());
+
+        $this->get('/?kiosk=main-gate')->assertOk();
+
+        // The point of the session binding: the URL only has to carry the selection once.
+        // Reaching the site through the nav or a refresh drops the query string, and an
+        // operator or admin who picked a gate should still be standing at it.
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Main Gate')
+            ->assertSee('PARKING LOT #'.self::LOT_A);
+    }
+
+    public function test_a_signed_in_browsers_kiosk_selection_ends_at_logout(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+
+        $this->actingAs($this->makeUser());
+
+        $this->get('/?kiosk=main-gate')->assertOk();
+
+        $this->post('/logout')->assertRedirect('/login');
+
+        // A login is the scope: the next person to sign in on this machine is not left at
+        // whatever gate the last user happened to be looking at.
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('Main Gate');
+    }
+
+    public function test_a_kiosk_url_still_overrides_the_selection_from_the_login(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+        $this->makeKiosk($lot, Kiosk::TYPE_EXIT, 'side-gate', 'Side Gate');
+
+        $this->actingAs($this->makeUser());
+
+        $this->get('/?kiosk=main-gate')->assertOk();
+
+        // Switching gate is still just opening the other URL, which is how the admin kiosk
+        // list works. The session is a fallback, not a claim that nothing else may override it.
+        $this->get('/?kiosk=side-gate')
+            ->assertOk()
+            ->assertSee('Side Gate')
+            ->assertDontSee('Main Gate');
+
+        $this->assertSame('side-gate', session('kiosk_key'));
+    }
+
+    public function test_an_anonymous_terminal_keeps_its_binding_across_the_session(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+
+        $this->get('/?kiosk=main-gate')->assertOk();
+
+        $this->assertSame('main-gate', session('kiosk_key'));
+
+        // The cookie is what survives a restart, but the session is read as a source too, so
+        // a terminal that loses its cookie mid-shift still resolves rather than silently
+        // falling back to the unbound page.
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Main Gate');
+    }
+
+    public function test_a_signed_in_browser_is_not_offered_an_unbind_it_cannot_use(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate');
+
+        $this->actingAs($this->makeUser());
+
+        // The escape hatch is for terminals holding a durable binding, where it is the only
+        // way off the gate. A signed-in browser's selection ends at its logout on its own, and
+        // the admin kiosk list is how you move to a different gate, so the link would be a
+        // button that appears to achieve nothing the user wanted.
+        $this->get('/?kiosk=main-gate')
+            ->assertOk()
+            ->assertDontSee('Not this kiosk? Unbind');
     }
 
     public function test_kiosk_page_warns_when_not_linked_to_a_lot(): void

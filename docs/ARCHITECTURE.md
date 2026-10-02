@@ -35,11 +35,21 @@ database structure, the models, the controllers, and the Livewire components.
 
 | Actor | Description |
 |---|---|
-| **Kiosk terminal** | A browser page (`/` + `?kiosk=<key>`) on a tablet behind a gate. Each kiosk is registered as an ENTRY or EXIT gate, so the card only has to be scanned — a hardware RFID reader on the keyboard-USB bus or manual typing, with no direction to pick. |
+| **Kiosk terminal** | A browser page (`/` + `?kiosk=<key>`) on a tablet behind a gate. Each kiosk is registered as an ENTRY or EXIT gate, so the card only has to be scanned — a hardware RFID reader on the keyboard-USB bus or manual typing, with no direction to pick. May run anonymously, or signed in as an **operator** (below). |
 | **ESP32 IR sensor node** | A low-cost board with one or more IR beam sensors per slot. It fires an HTTP POST to `/api/slot-status` each time a beam is broken/restored. |
-| **Operator/Admin** | Uses the unauthenticated `/admin/*` Livewire pages to add parking lots, floors/slot counts, per-slot 2W/4W designation, and to register kiosks. |
+| **Super admin** | Exactly one account, attached to no lots and therefore reaching every lot. Owns site-wide configuration (creating lots), the corrections that touch other people's records (editing/deleting vehicle registrations), and staff accounts. |
+| **Lot admin** | Attached to one or more lots via `user_parking_lot`. Manages the operational shape of their own lots — floors, slot counts, kiosks, and the card registry — and can bind a card to a vehicle at the gate. Sign-in lands them in the `/admin/*` panel. |
+| **Operator** | Gate staff, attached to one or more lots. Holds a single permission (`kiosks.operate`) and can do exactly one thing: run the terminal for a kiosk in their own lot. Refused every `/admin/*` page and redirected to their gate instead; refused any kiosk outside their lot. |
 | **Driver** | Carries an RFID card. Can self-register a new card at the kiosk on first entry. |
 | **Viewer** | Opens `/lots` or `/slots` to see live occupancy. |
+
+**Why the kiosk is both anonymous and authenticated.** The terminal page is public, so a
+tablet can be mounted and work with no account at all — that is the cheapest deployment and
+it stays the default. The `operator` role exists for the other case: a gate that needs an
+account of its own, so the terminal is tied to a named person rather than to whoever happens
+to be holding the tablet. Whoever is at the gate, the selection sticks for as long as they are
+there — an operator's also survives a restart, because the binding is per-gate hardware rather
+than per-person. See §5A.
 
 ---
 
@@ -74,7 +84,7 @@ All web routes render a Livewire component in the shared `components.layouts.app
 
 | Method | Path | Name | Livewire component | Purpose |
 |---|---|---|---|---|
-| GET | `/` | `home` | `App\Livewire\Home` | The **kiosk terminal**. `?kiosk=<key>` binds it to a registered kiosk (remembered across browser restarts); shows the ENTRY/EXIT gate indicator, manual card input, and a recent-scan feed. |
+| GET | `/` | `home` | `App\Livewire\Home` | The **kiosk terminal**. `?kiosk=<key>` binds it to a registered kiosk (remembered across browser restarts); shows the ENTRY/EXIT gate indicator, manual card input, and a recent-scan feed. An operator with no kiosk resolved gets a **picker** of the gates in their own lot instead. |
 | GET | `/kiosk/forget` | `ForgetKioskController` | Releases the browser from its bound kiosk (clears the cookie + session) and redirects home. |
 | GET | `/lots` | `lots.overview` | `App\Livewire\LotOverview` | Live **lot report** — all lots with free/occupied counts, per-type (2W/4W) occupancy, search, sort. Polls every 10s. |
 | GET | `/slots` | `slots.dashboard` | `App\Livewire\SlotDashboard` | Live **slot monitor** — per-floor schematic of slot tiles; updates instantly over Echo. Lot selector + link to floor config. |
@@ -241,22 +251,109 @@ Livewire update requests. It decides which kiosk a browser is bound to and mirro
 binding into the session (`kiosk_key`) and a long-lived cookie (`parkeasy_kiosk`, one year,
 refreshed on each visit, `HttpOnly` + `secure` so the key is never readable from JS).
 
-Resolution order is query string → cookie. An explicit `?kiosk=` always wins, so binding or
-moving a terminal is just a new URL, and nothing needs clearing first. The session mirrors
-the key for the current visit and so that unbinding has something to clear, but is
-deliberately not a resolution source — that would reintroduce the fragility the cookie
-exists to avoid.
+Resolution order is query string → session → cookie, narrowest scope first. An explicit
+`?kiosk=` always wins, so binding or moving a terminal is just a new URL and nothing needs
+clearing first.
 
-Only a kiosk row that actually exists is remembered. An unrecognised key — a typo, or a
-kiosk deleted since the cookie was written — is reported as unbound rather than stored,
-because a terminal pinned to a gate that no longer exists would fail every scan with no way
-to recover short of clearing site data.
+Only a kiosk row that actually exists is remembered, at every level: an unrecognised key — a
+typo, or a kiosk deleted since it was stored — falls through to the next source rather than
+being reported as unbound. Otherwise a stale session entry would mask a working cookie.
 
-The session alone is not sufficient here: a kiosk sits idle between shifts, and browsers
-discard session state on restart or when site data is cleared, which would silently unbind
-the gate. `ForgetKioskController` (`GET /kiosk/forget`) is the escape hatch for a shared
-machine that was bound once; it queues the cookie forget *after* the middleware so the
-clearing response cannot re-plant the cookie it is removing.
+**Two stores, two questions.** The session lasts as long as the visit or the login; the
+cookie lasts a year, and is the only thing that survives a restart. Neither is redundant:
+
+- An anonymous terminal has no login, so the session ends at the browser restart and the
+  cookie is what keeps the gate bound across it. A kiosk sits idle between shifts, so losing
+  that binding costs a physical trip to the gate.
+- A signed-in browser wants the opposite. The selection should last exactly as long as the
+  login, and a login is *narrower* than a browser profile — so the cookie would keep it
+  pinned for a year after sign-out and dump whoever used that machine onto a gate view. The
+  session is the correct scope, and it ends at the logout.
+
+**Who gets the long-lived cookie.** Only a browser that *is* the gate: an anonymous terminal,
+or an operator's tablet. Staff who reach `?kiosk=` did so by clicking a link in the admin
+kiosk list, on their own machine, so their selection is written to the session only and their
+cookie is actively cleared rather than merely left to expire. That also un-pins laptops bound
+to a gate before this rule existed. The clear is `ResolveKioskBinding::forgetCookie()`,
+deliberately *not* `release()`: it must not take the session key with it, or a signed-in user
+would be un-pinned the moment they signed in.
+
+The decision is `User::operatesKiosks()`, which answers from the **role** and never from
+`can('kiosks.operate')`. `Gate::before` waves the super admin through every check, so a
+permission test there would hand the break-glass account the same treatment as gate staff and
+quietly bind the super admin's own laptop to a gate.
+
+An operator is additionally held to their own lot: `Gate::authorize('operate', $kiosk)` runs
+whenever the resolved kiosk came from a request with an operator on it, so another lot's kiosk
+is a 403 rather than a page that silently renders unbound.
+
+`ForgetKioskController` (`GET /kiosk/forget`) is the manual escape hatch for a shared machine
+that was bound once; it delegates to `release()`, which clears both stores, and because
+`release()` queues onto the response cookie jar it lands *after* the middleware, so the
+clearing response cannot re-plant the cookie it is removing. The "Not this kiosk? Unbind" link
+is rendered for anonymous browsers and for operators — the latter being how a terminal is
+moved from one gate to another — but not for staff, whose selection already ends at their
+logout and who switch gates through the admin kiosk list.
+
+### 5B. `EnsureCanUseAdminPanel` (`app/Http/Middleware/EnsureCanUseAdminPanel.php`)
+
+Applied to the whole `/admin/*` group in `routes/web.php`, alongside `auth`.
+
+This is the *page* boundary, not the security boundary. Each admin component calls
+`Gate::authorize` itself — in `mount()` and before every mutating action — and those calls
+run per action, so they also cover Livewire update requests, which do not pass through route
+middleware at all. What this adds is a decision before the component renders: without it an
+account with no admin role passes `auth` and the only thing that stops it is a 403 from
+inside the component, having already rendered the shell of a page it cannot use.
+
+- Staff (`User::canUseAdminPanel()`) pass through.
+- An **operator** is redirected to their kiosk page. A 403 on a link the navigation never
+  shows them tells them nothing, and running a gate is the entire job.
+- Everyone else is refused with 403, exactly as before. An account that is neither staff nor
+  an operator has no business here, and redirecting it somewhere would only hide that.
+
+`canUseAdminPanel()` replaced an inline `isSuperAdmin() || isLotAdmin()` in
+`ParkingLotPolicy::viewAny` and now serves three callers: the policy, this middleware, and
+the sign-in redirect. It stays role-based rather than permission-based so the staff set is
+unchanged — the panel was never reachable on permissions alone.
+
+---
+
+## 5C. Roles and permissions
+
+`app/Models/Access.php` is the whole catalogue: one file so the seeder, the policies and the
+navigation cannot drift apart. `sync()` creates every permission from `allPermissions()` — a
+union of the three role sets — because a permission granted only to a lesser role
+(`kiosks.operate` is exactly that) would otherwise never get a row, and `syncPermissions()`
+would fail on a name with nothing behind it.
+
+| Permission | operator | lot admin | super admin |
+|---|---|---|---|
+| `kiosks.operate` | ✓ | | ✓ |
+| `lots.manage` | | | ✓ |
+| `floors.manage` | | ✓ | ✓ |
+| `slots.manage` | | ✓ | ✓ |
+| `kiosks.manage` | | ✓ | ✓ |
+| `vehicles.view` | | ✓ | ✓ |
+| `vehicles.create` | | ✓ | ✓ |
+| `vehicles.update` | | | ✓ |
+| `vehicles.delete` | | | ✓ |
+| `users.manage` | | | ✓ |
+
+`kiosks.operate` is deliberately a separate ability from `kiosks.manage`. The latter is the
+right to *configure* kiosks — their lot, their gate type, their key — and belongs to lot
+admins. The former is only the right to stand at a gate and scan, and is granted to nobody
+else, so the two cannot be confused when `KioskPolicy` reads. `KioskPolicy::operate()` checks
+both halves: the permission, and `administersLot($kiosk->parking_lot_id)`.
+
+Lot scoping needs no per-role rule. `User::administeredLotIds()` returns `null` only for the
+super admin and otherwise reads the `user_parking_lot` pivot, so an operator inherits the
+boundary from existing code — and an operator with no assignment gets an empty array, which
+means `where 0 = 1` rather than an unfiltered list.
+
+**Not enforced:** `/api/rfid-scan` and `/api/rfid-scan/enrol` take the kiosk key in the body
+and are unauthenticated. The operator role bounds what an account can *see and open*, not
+what can be posted to the scan endpoints. Closing that is a separate piece of work (see §10).
 
 ---
 
@@ -489,8 +586,15 @@ php artisan reverb:start
 
 ## 10. Known limitations / roadmap pointers
 
-- **No authentication** on kiosk/admin/API (documented in `PITCH.md` as the top
-  hardening item — API tokens for sensor nodes + operator login).
+- **The scan API is still unauthenticated.** `/api/rfid-scan` and `/api/rfid-scan/enrol`
+  accept a kiosk key in the body from any caller. The `operator` role (see §5C) bounds what
+  an account can see and open; it does not bound what can be posted. Closing this is the
+  remaining half of the hardening item in `PITCH.md`.
+- **No UI for creating staff accounts.** `users.manage` exists in the catalogue with no
+  consumer, so an operator — or any other role — can currently only be created from tinker or
+  a seeder. The seeded accounts are the super admin and one lot admin per lot
+  (`AdminUserSeeder`); no operators are seeded, because they represent real named staff at a
+  real gate rather than a fixed set.
 - **IR toggling is a blind flip** — a dropped event desyncs a slot until the next toggle;
   the roadmap is state-based telemetry + heartbeat/timeout reconciliation.
 - **Fee is computed, not collected** — payment (UPI/card) is the primary roadmap feature.

@@ -13,8 +13,11 @@ use Spatie\Permission\PermissionRegistrar;
  * The shape of the model: there is exactly one super admin, who owns site-wide
  * configuration (the lots themselves) and the corrections that touch other people's
  * records. Lot admins own the operational shape of their own lots - floors, slots and
- * kiosks - and can bind a card to a vehicle at the gate. Vehicles are deliberately not
- * lot-scoped, because a card bound anywhere has to be recognised at every gate.
+ * kiosks - and can bind a card to a vehicle at the gate. Operators are the gate staff on
+ * the tablet itself: they can run the terminal for a kiosk in their own lot and nothing
+ * else, which is why they are a separate role rather than a lot admin with permissions
+ * removed. Vehicles are deliberately not lot-scoped, because a card bound anywhere has to
+ * be recognised at every gate.
  */
 final class Access
 {
@@ -25,6 +28,16 @@ final class Access
     public const MANAGE_SLOTS = 'slots.manage';
 
     public const MANAGE_KIOSKS = 'kiosks.manage';
+
+    /**
+     * Run a kiosk terminal: reach the gate page for a kiosk in the holder's own lot.
+     *
+     * Distinct from MANAGE_KIOSKS on purpose. That one is the right to *configure* kiosks -
+     * their lot, their gate type, their key - and is granted to lot admins. This one is
+     * only the right to stand at a gate and scan, and is granted to nobody else, so the
+     * two cannot be confused when the policy reads.
+     */
+    public const OPERATE_KIOSKS = 'kiosks.operate';
 
     /** Read the site-wide vehicle registry. Needed at the gate to look up any card. */
     public const VIEW_VEHICLES = 'vehicles.view';
@@ -39,6 +52,16 @@ final class Access
     public const DELETE_VEHICLES = 'vehicles.delete';
 
     public const MANAGE_USERS = 'users.manage';
+
+    /**
+     * @return array<int, string>
+     */
+    public static function operatorPermissions(): array
+    {
+        return [
+            self::OPERATE_KIOSKS,
+        ];
+    }
 
     /**
      * @return array<int, string>
@@ -64,6 +87,10 @@ final class Access
             self::MANAGE_FLOORS,
             self::MANAGE_SLOTS,
             self::MANAGE_KIOSKS,
+            // Granted for completeness rather than out of need: Gate::before lets the super
+            // admin through every check regardless, but a role whose permission set is a
+            // subset of the abilities its holder has is a lie waiting to be read.
+            self::OPERATE_KIOSKS,
             self::VIEW_VEHICLES,
             self::CREATE_VEHICLES,
             self::UPDATE_VEHICLES,
@@ -73,7 +100,25 @@ final class Access
     }
 
     /**
-     * Create every role and permission if missing, then attach the lot-admin set.
+     * Every permission any role holds. The set of permissions created by sync().
+     *
+     * A union rather than the super-admin list alone, because a permission granted only to
+     * a lesser role - `kiosks.operate` is exactly that - would otherwise never be created,
+     * and syncPermissions() would fail on a name that has no row behind it.
+     *
+     * @return array<int, string>
+     */
+    public static function allPermissions(): array
+    {
+        return array_values(array_unique(array_merge(
+            self::operatorPermissions(),
+            self::lotAdminPermissions(),
+            self::superAdminPermissions(),
+        )));
+    }
+
+    /**
+     * Create every role and permission if missing, then attach each role's permission set.
      *
      * Note what this deliberately does not do: delete permissions that are no longer in
      * the catalogue. A mass delete would bypass model events and leave orphaned
@@ -96,7 +141,7 @@ final class Access
         // are sitting in the database, which is what this method is supposed to guarantee.
         self::flushPermissionCache();
 
-        $all = self::superAdminPermissions();
+        $all = self::allPermissions();
 
         foreach ($all as $permission) {
             Permission::findOrCreate($permission, 'web');
@@ -105,8 +150,11 @@ final class Access
         // Re-seed the registrar so the names below resolve against what was just written.
         self::flushPermissionCache();
 
-        $lotAdmin = Role::findOrCreate(User::ROLE_LOT_ADMIN, 'web');
-        $lotAdmin->syncPermissions(self::lotAdminPermissions());
+        Role::findOrCreate(User::ROLE_OPERATOR, 'web')
+            ->syncPermissions(self::operatorPermissions());
+
+        Role::findOrCreate(User::ROLE_LOT_ADMIN, 'web')
+            ->syncPermissions(self::lotAdminPermissions());
 
         Role::findOrCreate(User::ROLE_SUPER_ADMIN, 'web')->syncPermissions($all);
 

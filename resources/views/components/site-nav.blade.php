@@ -59,20 +59,31 @@
         {{-- Staff sign-in / sign-out. The mobile menu carries the fuller version. --}}
         <div class="flex shrink-0 items-center gap-2">
             @auth
-                @if (auth()->user()->isSuperAdmin())
+                @php
+                    $navUser = auth()->user();
+
+                    // Which lot an account is in, since everything they can reach is scoped
+                    // to it. They may hold more than one, so name the first and count the
+                    // rest rather than truncating a list into a mystery.
+                    $myLots = $navUser->lots()->pluck('name');
+
+                    // An account may hold several roles, so the badge names the one that
+                    // decides what it can actually reach, in that order of precedence.
+                    $navRole = match (true) {
+                        $navUser->isSuperAdmin() => 'Super admin',
+                        $navUser->isLotAdmin() => 'Lot admin',
+                        $navUser->isOperator() => 'Operator',
+                        default => null,
+                    };
+                @endphp
+                @if ($navUser->isSuperAdmin())
                     <span class="hidden rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-300 sm:inline">
                         Super admin
                     </span>
                 @else
-                    {{-- Which lot a lot admin is in, since everything they can reach is
-                         scoped to it. They may hold more than one, so name the first and
-                         count the rest rather than truncating a list into a mystery. --}}
-                    @php
-                        $myLots = auth()->user()->lots()->pluck('name');
-                    @endphp
                     <span class="hidden max-w-[12rem] truncate rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white/60 sm:inline"
-                          title="{{ auth()->user()->isSuperAdmin() ? 'Super admin' : 'Lot admin of '.$myLots->join(', ') }}">
-                        {{ $myLots->isEmpty() ? 'Lot admin' : $myLots->first().($myLots->count() > 1 ? ' +'.$myLots->count() - 1 : '') }}
+                          title="{{ $navRole }} — {{ $myLots->join(', ') }}">
+                        {{ $myLots->isEmpty() ? $navRole : $myLots->first().($myLots->count() > 1 ? ' +'.($myLots->count() - 1) : '') }}
                     </span>
                 @endif
                 <form method="POST" action="{{ route('logout') }}">
@@ -138,7 +149,9 @@
                 <div class="min-w-0">
                     <div class="truncate text-sm font-bold text-white">{{ auth()->user()->name }}</div>
                     <div class="truncate text-[11px] text-white/45">
-                        {{ auth()->user()->isSuperAdmin() ? 'Super admin — all lots' : 'Lot admin — '.auth()->user()->lots()->pluck('name')->join(', ') }}
+                        {{ auth()->user()->isSuperAdmin()
+                            ? 'Super admin — all lots'
+                            : $navRole.' — '.auth()->user()->lots()->pluck('name')->join(', ') }}
                     </div>
                 </div>
                 <form method="POST" action="{{ route('logout') }}" class="shrink-0">

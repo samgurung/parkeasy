@@ -38,13 +38,54 @@
             <div id="kiosk-clock-mobile" class="text-lg font-bold tabular-nums drop-shadow"></div>
             <div id="kiosk-date-mobile" class="text-xs text-white/60"></div>
         </div>
-        @if (!$kioskLotNumber)
-            <p class="mt-2 text-center text-sm font-bold text-amber-300">
-                <i class="fas fa-triangle-exclamation mr-1"></i>
-                This kiosk is not linked to a parking lot. Register it in the admin panel and open it with
-                <span class="font-mono text-amber-200">/?kiosk=&lt;key&gt;</span>
-            </p>
-        @endif
+        @if ($gateChoices->isNotEmpty())
+            {{-- An operator with more than one gate has a real choice to make - entry or
+                 exit - and the answer has to land in the binding rather than be guessed at.
+                 The scanner below is meaningless until a gate is chosen, so it is replaced
+                 rather than shown greyed out. --}}
+            <main class="my-10 flex flex-1 flex-col items-center justify-center gap-6">
+                <div class="text-center">
+                    <h2 class="text-2xl font-black uppercase tracking-[0.2em] text-white">Choose your gate</h2>
+                    <p class="mt-2 text-sm text-white/60">
+                        This terminal stays on the gate you pick, across browser restarts, until you unbind it.
+                    </p>
+                </div>
+                <div class="grid w-full max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
+                    @foreach ($gateChoices as $gate)
+                        <a href="{{ route('home', ['kiosk' => $gate->key]) }}"
+                            class="flex items-center gap-4 rounded-3xl border border-white/15 bg-white/10 px-6 py-5 text-white shadow-2xl backdrop-blur-xl transition hover:border-sky-400/60 hover:bg-white/15">
+                            <span @class([
+                                    'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl text-white shadow-lg',
+                                    'bg-gradient-to-br from-emerald-400 to-teal-600 shadow-teal-500/30' => $gate->isEntry(),
+                                    'bg-gradient-to-br from-rose-500 to-orange-500 shadow-orange-500/30' => $gate->isExit(),
+                                    'bg-gradient-to-br from-sky-400 to-blue-600 shadow-blue-500/30' => $gate->type === null,
+                                ])>
+                                <i @class([
+                                        'fas',
+                                        'fa-arrow-right-to-bracket' => $gate->isEntry(),
+                                        'fa-arrow-right-from-bracket' => $gate->isExit(),
+                                        'fa-circle-question' => $gate->type === null,
+                                    ])></i>
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block truncate text-lg font-black uppercase tracking-widest">{{ $gate->name }}</span>
+                                <span class="mt-0.5 block text-xs font-bold uppercase tracking-[0.3em] text-white/60">
+                                    {{ $gate->parkingLot?->name }} ·
+                                    {{ $gate->type === null ? 'No gate type' : \Illuminate\Support\Str::upper($gate->type) }}
+                                </span>
+                            </span>
+                        </a>
+                    @endforeach
+                </div>
+            </main>
+        @else
+            @if (!$kioskLotNumber)
+                <p class="mt-2 text-center text-sm font-bold text-amber-300">
+                    <i class="fas fa-triangle-exclamation mr-1"></i>
+                    This kiosk is not linked to a parking lot. Register it in the admin panel and open it with
+                    <span class="font-mono text-amber-200">/?kiosk=&lt;key&gt;</span>
+                </p>
+            @endif
 
         @if ($kioskLotNumber)
             <div class="flex justify-center mt-6">
@@ -174,11 +215,17 @@
             </template>
         </section>
 
+        @endif
+
         <footer class="mt-6 flex flex-wrap items-center justify-between gap-2 text-xs text-white/50">
             <span><i class="fas fa-bolt text-amber-400"></i> Live via Reverb</span>
-            @if ($kioskKey)
+            @if ($kioskKey && (auth()->guest() || auth()->user()->operatesKiosks()))
                 {{-- The binding is remembered for a year, so a shared machine needs a way
-                     back to the unbound state without clearing site data. --}}
+                     back to the unbound state without clearing site data. An operator needs
+                     it too: it is how they move a terminal from one gate to another, which
+                     drops them back onto the picker above. Staff previewing a kiosk hold no
+                     binding - ResolveKioskBinding releases it - so offering the link to them
+                     would be a button that does nothing. --}}
                 <a href="{{ route('kiosk.forget') }}"
                     class="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-white/60 transition hover:bg-white/15 hover:text-white">
                     <i class="fas fa-link-slash mr-1"></i> Not this kiosk? Unbind

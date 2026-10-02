@@ -15,7 +15,10 @@ class ParkingLotPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isLotAdmin();
+        // Null means "may the panel be used at all", asked before any lot is chosen. Role
+        // based rather than permission based, because the panel has only ever been
+        // reachable by staff - an operator is refused here as well as by the route group.
+        return $user->canUseAdminPanel();
     }
 
     public function view(User $user, ?ParkingLot $lot = null): bool

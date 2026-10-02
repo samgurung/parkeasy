@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ForgetKioskController;
+use App\Http\Middleware\EnsureCanUseAdminPanel;
 use App\Livewire\Admin\FloorManager;
 use App\Livewire\Admin\KioskManager;
 use App\Livewire\Admin\LotManager;
@@ -25,6 +26,13 @@ Route::get('/slots', SlotDashboard::class)->name('slots.dashboard');
 // The kiosk terminal and the two live dashboards above stay public on purpose: a gate
 // tablet and a wall-mounted monitor have no account, and the occupancy figures they show
 // are not sensitive. Everything that *changes* data sits behind this.
+//
+// Three roles, and the shape of the panel follows from which one you are:
+//   - super admin  every lot, plus the corrections that touch other people's records
+//   - lot admin    one lot: floors, slots, kiosks, and the card registry
+//   - operator     one lot: run a gate terminal, and nothing else
+// An operator is redirected out of the admin panel to their kiosk page by the middleware
+// below, which is the second half of "can only open the kiosk".
 
 Route::get('/login', Login::class)->middleware('guest')->name('login');
 
@@ -36,7 +44,7 @@ Route::post('/logout', function () {
     return to_route('login');
 })->middleware('auth')->name('logout');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', EnsureCanUseAdminPanel::class])->group(function () {
     // Admin: configure the floors and slot counts of the parking lot.
     Route::get('/admin/floors', FloorManager::class)->name('admin.floors');
     Route::get('/admin/lots', LotManager::class)->name('admin.lots');

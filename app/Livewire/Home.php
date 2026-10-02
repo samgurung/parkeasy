@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Entry;
+use App\Models\Kiosk;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Component;
@@ -27,7 +28,30 @@ class Home extends Component
             'kioskType' => $kiosk?->type,
             'kioskLotNumber' => $kiosk?->parkingLot?->lot_number,
             'kioskLotName' => $kiosk?->parkingLot?->name,
+            'gateChoices' => $kiosk === null ? $this->gateChoices() : collect(),
         ]);
+    }
+
+    /**
+     * The gates an operator may run, so the unbound page can offer them a choice.
+     *
+     * Empty for anyone else: an anonymous visitor has no account to scope by, and staff
+     * arrived here to preview one specific kiosk that has already resolved, so a list would
+     * be either wrong or noise. An operator with two or more gates is the only real case -
+     * entry or exit is a genuine decision they have to make, and the answer has to be
+     * recorded in the binding rather than guessed at.
+     *
+     * @return Collection<int, Kiosk>
+     */
+    protected function gateChoices(): Collection
+    {
+        $user = auth()->user();
+
+        if (! $user?->operatesKiosks()) {
+            return collect();
+        }
+
+        return $user->operableKiosks()->load('parkingLot');
     }
 
     /**

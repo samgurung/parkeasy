@@ -198,7 +198,7 @@ class StaffAuthorizationTest extends TestCase
         // Two lots cannot both fit in the badge, so it names one and counts the rest.
         // Truncating instead would leave the operator unable to tell one lot from three.
         $this->assertStringContainsString('Central Garage +1', $nav);
-        $this->assertStringContainsString('Lot admin of Central Garage, Riverside', $nav);
+        $this->assertStringContainsString('Lot admin — Central Garage, Riverside', $nav);
     }
 
     public function test_the_nav_falls_back_to_the_role_for_a_lot_admin_holding_no_lots(): void
