@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ForgetKioskController;
 use App\Livewire\Admin\FloorManager;
 use App\Livewire\Admin\KioskManager;
 use App\Livewire\Admin\LotManager;
@@ -18,3 +19,7 @@ Route::get('/slots', SlotDashboard::class)->name('slots.dashboard');
 Route::get('/admin/floors', FloorManager::class)->name('admin.floors');
 Route::get('/admin/lots', LotManager::class)->name('admin.lots');
 Route::get('/admin/kiosks', KioskManager::class)->name('admin.kiosks');
+
+// Release this browser from a kiosk it is bound to, so a shared machine can go back to
+// being a plain kiosk viewer. Re-binding is just opening another gate's ?kiosk= URL.
+Route::get('/kiosk/forget', ForgetKioskController::class)->name('kiosk.forget');
