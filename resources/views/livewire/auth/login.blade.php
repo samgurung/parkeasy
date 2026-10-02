@@ -1,6 +1,3 @@
-{{-- The way in. Behind this sits everything that moves a vehicle: the kiosk terminal at /
-     is the entry and exit screen, so reaching it means being somebody. A gate tablet signs
-     in once and then stays bound to its own gate. --}}
 
 <div class="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center px-4 py-12">
     <div class="w-full rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl shadow-black/40">
@@ -38,11 +35,6 @@
             </button>
         </form>
 
-        <p class="mt-6 flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/45">
-            <i class="fas fa-circle-info mt-0.5 shrink-0 text-sky-300"></i>
-            <span>An operator is sent straight to their lot's gate and stays there — one sign-in
-                per shift, and the tablet remembers its own gate across a restart. Lot admins and
-                super admins land in the admin panel.</span>
-        </p>
+
     </div>
 </div>
