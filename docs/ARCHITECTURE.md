@@ -61,8 +61,8 @@ API against the specific kiosk, not by the route. An account with no role signs 
 on the unbound page — visible as broken rather than silently treated as an operator.
 
 **Why a landing page rather than a redirect.** The login is enforced in `Home::render()`
-instead of `->middleware('auth')`, so a guest gets `livewire.landing` — what the app does,
-who signs in, and a Sign in button — rather than being dropped on a login form. A redirect
+instead of `->middleware('auth')`, so a guest gets `livewire.landing` — one line on what the
+app is, and a Sign in button — rather than being dropped on a login form. A redirect
 says "you may not see this" and nothing else; for someone who arrived from a link or a QR
 code, that is a dead end with no explanation. Two further reasons fell out of it:
 
@@ -105,7 +105,7 @@ All web routes render a Livewire component in the shared `components.layouts.app
 
 | Method | Path | Name | Livewire component | Purpose |
 |---|---|---|---|---|
-| GET | `/` | `home` | `App\Livewire\Home` | **Two pages behind one URL**, branched in `Home::render()`: a guest gets the **landing page** (`livewire.landing` — what the app does, who signs in, a Sign in button); once signed in it is the **kiosk terminal**. `?kiosk=<key>` binds it to a registered kiosk (an operator's binding is remembered across browser restarts); shows the ENTRY/EXIT gate indicator, manual card input, and a recent-scan feed. An operator with no kiosk resolved gets a **picker** of the gates in their own lot instead. |
+| GET | `/` | `home` | `App\Livewire\Home` | **Two pages behind one URL**, branched in `Home::render()`: a guest gets the **landing page** (`livewire.landing` — one line on what the app is, and a Sign in button); once signed in it is the **kiosk terminal**. `?kiosk=<key>` binds it to a registered kiosk (an operator's binding is remembered across browser restarts); shows the ENTRY/EXIT gate indicator, manual card input, and a recent-scan feed. An operator with no kiosk resolved gets a **picker** of the gates in their own lot instead. |
 | GET | `/kiosk/forget` | `ForgetKioskController` | Releases the browser from its bound kiosk (clears the cookie + session) and redirects home. |
 | GET | `/lots` | `lots.overview` | `App\Livewire\LotOverview` | Live **lot report** — all lots with free/occupied counts, per-type (2W/4W) occupancy, search, sort. Polls every 10s. |
 | GET | `/slots` | `slots.dashboard` | `App\Livewire\SlotDashboard` | Live **slot monitor** — per-floor schematic of slot tiles; updates instantly over Echo. Lot selector + link to floor config. |
