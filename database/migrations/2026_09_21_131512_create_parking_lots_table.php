@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('parking_lots', function (Blueprint $table) {
             $table->id();
-            $table->string('name');                 // driver-facing name, e.g. "Downtown Plaza"
+            $table->string('name');                 // driver-facing name, e.g. "Police Bazaar"
             $table->unsignedInteger('lot_number');  // auto-assigned 1, 2, 3, … sent by ESP32
             $table->string('address')->nullable();  // street address to help drivers find the lot
             $table->timestamps();
