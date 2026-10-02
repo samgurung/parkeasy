@@ -17,7 +17,7 @@
 
     <div class="relative mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-16">
         <span class="inline-flex w-fit items-center gap-2 rounded-full border border-teal-300/30 bg-teal-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-teal-200">
-            <i class="fas fa-id-card"></i> RFID parking management
+            <i class="fas fa-city"></i> Smart parking for a smart city
         </span>
 
         <h1 class="mt-6 text-4xl font-black tracking-tight text-white sm:text-6xl">

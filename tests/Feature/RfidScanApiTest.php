@@ -556,7 +556,7 @@ class RfidScanApiTest extends TestCase
         foreach (['/', '/?kiosk=main-gate'] as $url) {
             $this->get($url)
                 ->assertOk()
-                ->assertSee('RFID parking management')
+                ->assertSee('Smart parking for a smart city')
                 ->assertDontSee('Main Gate')
                 ->assertDontSee('PARKING LOT #'.self::LOT_A)
                 ->assertDontSee('id="manual-card"', false);
@@ -776,7 +776,7 @@ class RfidScanApiTest extends TestCase
         // the last user happened to be looking at.
         $this->get('/')
             ->assertOk()
-            ->assertSee('RFID parking management')
+            ->assertSee('Smart parking for a smart city')
             ->assertDontSee('Main Gate');
     }
 

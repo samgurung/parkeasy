@@ -19,7 +19,7 @@ class ExampleTest extends TestCase
         $response = $this->get('/')->assertOk();
 
         // An explanation, and the way in.
-        $response->assertSee('RFID parking management');
+        $response->assertSee('Smart parking for a smart city');
         $response->assertSee('Sign in');
         $response->assertSee(route('login'), false);
 
