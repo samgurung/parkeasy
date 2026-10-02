@@ -240,6 +240,34 @@ class StaffAuthorizationTest extends TestCase
         $this->assertStringContainsString('Lot admin — Central Garage, Riverside', $nav);
     }
 
+    public function test_the_nav_names_a_lot_admins_lowest_numbered_lot_first(): void
+    {
+        // The badge names the first lot and counts the rest, so which lot is "first" has to
+        // be decided rather than left to whatever order the query happens to return. It is
+        // pinned to lot_number because that is the stable, admin-facing identity of a lot.
+        //
+        // Left to the join, the order is by row id - the order lots happened to be created
+        // in. That is not so much wrong as arbitrary: it would change what an admin is shown
+        // for no reason connected to their lot. These two lots are deliberately set up with
+        // id order and lot_number order disagreeing, since otherwise the two agree and the
+        // test would pass against the unfixed code.
+        $this->lotA->update(['name' => 'Riverside', 'lot_number' => $this->lotA->lot_number + 10]);
+        $this->lotB->update(['name' => 'Central Garage']);
+
+        $this->assertGreaterThan(
+            $this->lotB->lot_number,
+            $this->lotA->lot_number,
+            'this test only proves anything if lot A is not the lowest-numbered lot'
+        );
+
+        $this->actingAsLotAdmin([$this->lotA, $this->lotB]);
+
+        $nav = $this->navHtml();
+
+        $this->assertStringContainsString('Central Garage +1', $nav);
+        $this->assertStringContainsString('Lot admin — Central Garage, Riverside', $nav);
+    }
+
     public function test_the_nav_falls_back_to_the_role_for_a_lot_admin_holding_no_lots(): void
     {
         $this->actingAsLotAdmin([]);

@@ -595,6 +595,11 @@ All components are **class-based** (Livewire 4). They render the Blade views und
   `authorizedLotIds()` — which aborts on a foreign id rather than silently narrowing the save.
 - A `super_admin` account is never attached to a lot: its reach is the role, so a pivot row
   would be inert and would make the navbar show one lot for an account that administers all.
+- The navbar badge names the account's lowest-numbered lot and counts the rest, so the lots
+  are ordered by `lot_number` rather than left to the join. Row id is the order lots happened
+  to be created in, which is arbitrary — it would change what a lot admin is shown for no
+  reason connected to their lot. The mobile panel reuses the same list rather than re-querying,
+  so the two renderings cannot disagree about order.
 - Editing leaves the password alone unless a new one is typed. Pre-filling it would put the
   existing password in the DOM; requiring it would force a reset on every unrelated role change.
 - Two checks are made in the component rather than left to `UserPolicy`, because `Gate::before`

@@ -75,7 +75,13 @@
                     // Which lot an account is in, since everything they can reach is scoped
                     // to it. They may hold more than one, so name the first and count the
                     // rest rather than truncating a list into a mystery.
-                    $myLots = $navUser->lots()->pluck('name');
+                    //
+                    // Ordered by lot_number because the badge names the first and the rest are
+                    // only counted - which makes "first" a claim about which lot matters most,
+                    // and row id would answer that with whichever lot happened to be created
+                    // first. lot_number is the stable, admin-facing identity of a lot, so it
+                    // is the one that stays put when lots are added or re-seeded.
+                    $myLots = $navUser->lots()->orderBy('lot_number')->pluck('name');
 
                     // An account may hold several roles, so the badge names the one that
                     // decides what it can actually reach, in that order of precedence.
@@ -169,7 +175,7 @@
                     <div class="truncate text-[11px] text-white/45">
                         {{ auth()->user()->isSuperAdmin()
                             ? 'Super admin — all lots'
-                            : $navRole.' — '.auth()->user()->lots()->pluck('name')->join(', ') }}
+                            : $navRole.' — '.$myLots->join(', ') }}
                     </div>
                 </div>
                 <form method="POST" action="{{ route('logout') }}" class="shrink-0">
