@@ -556,7 +556,7 @@ class RfidScanApiTest extends TestCase
         foreach (['/', '/?kiosk=main-gate'] as $url) {
             $this->get($url)
                 ->assertOk()
-                ->assertSee('Smart parking for a smart city')
+                ->assertSee(route('login'), false)
                 ->assertDontSee('Main Gate')
                 ->assertDontSee('PARKING LOT #'.self::LOT_A)
                 ->assertDontSee('id="manual-card"', false);
@@ -776,8 +776,9 @@ class RfidScanApiTest extends TestCase
         // the last user happened to be looking at.
         $this->get('/')
             ->assertOk()
-            ->assertSee('Smart parking for a smart city')
-            ->assertDontSee('Main Gate');
+            ->assertSee(route('login'), false)
+            ->assertDontSee('Main Gate')
+            ->assertDontSee('id="manual-card"', false);
     }
 
     public function test_a_kiosk_url_still_overrides_the_selection_from_the_login(): void
@@ -819,20 +820,79 @@ class RfidScanApiTest extends TestCase
             ->assertSee('Main Gate');
     }
 
-    public function test_a_signed_in_browser_is_not_offered_an_unbind_it_cannot_use(): void
+    public function test_any_account_bound_to_a_kiosk_is_offered_the_unbind(): void
     {
         $lot = $this->makeLot(self::LOT_A);
         $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate');
 
-        $this->actingAs($this->makeUser());
+        // Offered on the strength of being bound, not of holding a role. `/kiosk/forget` is a
+        // public route that changes no data, so there was never a boundary here - and asking
+        // the role question meant the lot admin covering a shift on a tablet, who is shown no
+        // picker and so had no way off the gate, was the one person never offered it.
+        $this->actingAs($this->makeOperator($lot));
+        $this->get('/?kiosk=main-gate')->assertOk()->assertSee('Not this kiosk? Unbind');
 
-        // The escape hatch is for terminals holding a durable binding, where it is the only
-        // way off the gate. A signed-in browser's selection ends at its logout on its own, and
-        // the admin kiosk list is how you move to a different gate, so the link would be a
-        // button that appears to achieve nothing the user wanted.
-        $this->get('/?kiosk=main-gate')
+        $this->flushSession();
+        $this->actingAs($this->makeUser());
+        $this->get('/?kiosk=main-gate')->assertOk()->assertSee('Not this kiosk? Unbind');
+
+        $this->flushSession();
+        $this->actingAs($this->makeUser());
+        $this->get('/')->assertOk()->assertDontSee('Not this kiosk? Unbind');
+    }
+
+    public function test_a_staff_unbind_lands_where_they_can_go_somewhere(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+
+        Access::sync();
+        $admin = $this->makeUser();
+        $admin->assignRole(User::ROLE_LOT_ADMIN);
+        $admin->lots()->sync([$lot->id]);
+
+        $this->actingAs($admin);
+
+        $this->get('/?kiosk=main-gate')->assertOk()->assertSee('Main Gate');
+
+        // A staff member is unbinding to get *off* the gate, not to choose another one. They
+        // are shown no picker, so the unbound terminal would be a warning with nowhere to go -
+        // they go to their own landing instead, which for a lot admin is the admin panel.
+        $this->get(route('kiosk.forget'))
+            ->assertRedirect(route('admin.lots'));
+
+        $this->assertNull(session('kiosk_key'));
+    }
+
+    public function test_an_operator_unbind_lands_back_at_the_gate_picker(): void
+    {
+        $lot = $this->makeLot(self::LOT_A);
+        $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
+        $this->makeKiosk($lot, Kiosk::TYPE_EXIT, 'side-gate', 'Side Gate');
+
+        $this->actingAs($this->makeOperator($lot));
+
+        $this->get('/?kiosk=main-gate')->assertOk()->assertSee('Main Gate');
+
+        // Operators unbind in order to choose, so they land on the unbound page where the
+        // picker is offered. This is the case that must NOT use landingUrl(): an operator
+        // with a single operable kiosk would be handed back /?kiosk=side-gate and re-bound
+        // one redirect later.
+        $this->get(route('kiosk.forget'))
+            ->assertRedirect(route('home'))
+            ->assertCookieExpired(ResolveKioskBinding::COOKIE_NAME);
+
+        $this->assertNull(session('kiosk_key'));
+
+        $this->flushSession();
+        $this->get('/')
             ->assertOk()
-            ->assertDontSee('Not this kiosk? Unbind');
+            ->assertSee('Choose your gate')
+            // Both gates are offered, since with two operable kiosks choosing is the point.
+            // The lot's gates are named in the picker, so this is where "still bound to
+            // main-gate" would show up if the release had not taken.
+            ->assertSee('Main Gate')
+            ->assertSee('Side Gate');
     }
 
     public function test_kiosk_page_warns_when_not_linked_to_a_lot(): void

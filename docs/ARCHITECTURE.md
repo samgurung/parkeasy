@@ -106,7 +106,7 @@ All web routes render a Livewire component in the shared `components.layouts.app
 | Method | Path | Name | Livewire component | Purpose |
 |---|---|---|---|---|
 | GET | `/` | `home` | `App\Livewire\Home` | **Two pages behind one URL**, branched in `Home::render()`: a guest gets the **landing page** (`livewire.landing` — one line on what the app is, and a Sign in button); once signed in it is the **kiosk terminal**. `?kiosk=<key>` binds it to a registered kiosk (an operator's binding is remembered across browser restarts); shows the ENTRY/EXIT gate indicator, manual card input, and a recent-scan feed. An operator with no kiosk resolved gets a **picker** of the gates in their own lot instead. |
-| GET | `/kiosk/forget` | `ForgetKioskController` | Releases the browser from its bound kiosk (clears the cookie + session) and redirects home. |
+| GET | `/kiosk/forget` | `ForgetKioskController` | Releases the browser from its bound kiosk (clears the cookie + session). Operators are sent back to the unbound terminal, where the gate picker is; everyone else to their own landing, since they are shown no picker. |
 | GET | `/lots` | `lots.overview` | `App\Livewire\LotOverview` | Live **lot report** — all lots with free/occupied counts, per-type (2W/4W) occupancy, search, sort. Polls every 10s. |
 | GET | `/slots` | `slots.dashboard` | `App\Livewire\SlotDashboard` | Live **slot monitor** — per-floor schematic of slot tiles; updates instantly over Echo. Lot selector + link to floor config. |
 | GET | `/admin/floors` | `admin.floors` | `App\Livewire\Admin\FloorManager` | Create/edit/delete **floors & slots**, and designate per-slot 2W/4W type. Supports `?lot=<id>` to scope the list. |
@@ -334,10 +334,24 @@ is a 403 rather than a page that silently renders unbound.
 `ForgetKioskController` (`GET /kiosk/forget`) is the manual escape hatch for a shared machine
 that was bound once; it delegates to `release()`, which clears both stores, and because
 `release()` queues onto the response cookie jar it lands *after* the middleware, so the
-clearing response cannot re-plant the cookie it is removing. The "Not this kiosk? Unbind" link
-is rendered for operators — that being how a terminal is moved from one gate to another — but
-not for staff, whose selection already ends at their logout and who switch gates through the
-admin kiosk list.
+clearing response cannot re-plant the cookie it is removing.
+
+The "Not this kiosk? Unbind" link is rendered for **any account bound to a kiosk**, not for
+operators only. The two conditions were being conflated: `operatesKiosks()` answers "may this
+person run a gate?", which is an authorisation question, while clearing the binding is a
+local-state reset. The route was public throughout and mutated nothing but the caller's own
+binding, so the link was never hiding a boundary — it was gating a utility on a role.
+
+Asking the role instead offered the escape hatch to the person least likely to need it. A lot
+admin covering a shift at a gate on a tablet, because the lot has no dedicated operator, is
+shown no picker and so had no way off a bound gate at all.
+
+Which destination follows from why each role unbinds. An operator unbinds in order to
+*choose*, so they go to the unbound terminal where the picker is offered. Staff unbind in order
+to get *off* the gate, and the unbound terminal would be a warning with nowhere to go, so they
+go to `landingUrl()`. Deliberately **not** `landingUrl()` for everyone: for an operator with a
+single operable kiosk that returns `/?kiosk=<key>`, which would re-bind them one redirect
+later and turn the button into a no-op.
 
 ### 5B. `EnsureCanUseAdminPanel` (`app/Http/Middleware/EnsureCanUseAdminPanel.php`)
 

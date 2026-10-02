@@ -219,17 +219,19 @@
 
         <footer class="mt-6 flex flex-wrap items-center justify-between gap-2 text-xs text-white/50">
             <span><i class="fas fa-bolt text-amber-400"></i> Live via Reverb</span>
-            @if ($kioskKey && auth()->user()?->operatesKiosks())
-                {{-- The binding is remembered for a year, so a shared tablet needs a way
-                     back to the unbound state without clearing site data. An operator needs
-                     it too: it is how they move a terminal from one gate to another, which
-                     drops them back onto the picker above. Staff previewing a kiosk hold no
-                     binding - ResolveKioskBinding releases it - so offering the link to them
-                     would be a button that does nothing.
+            @if ($kioskKey)
+                {{-- Shown to anyone bound to a kiosk, which is the condition that actually
+                     describes it. This used to ask whether the account operates kiosks, but
+                     "may this person run a gate?" is an authorisation question and clearing
+                     the binding is a local-state reset - `/kiosk/forget` is a public route
+                     that changes no data, so there was never anything behind the link to
+                     hide.
 
-                     The `guest()` arm this used to have is gone with the guest terminal: the
-                     route is behind `auth`, so there is no longer an anonymous browser here
-                     to unbind. --}}
+                     Asking the role instead meant offering the escape hatch to the person
+                     least likely to need it. A lot admin working a gate on a tablet because
+                     the lot has no dedicated operator is the case that matters, and they
+                     have no picker to fall back on, so without this they were stranded on a
+                     gate with no way off it short of clearing site data by hand. --}}
                 <a href="{{ route('kiosk.forget') }}"
                     class="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-white/60 transition hover:bg-white/15 hover:text-white">
                     <i class="fas fa-link-slash mr-1"></i> Not this kiosk? Unbind

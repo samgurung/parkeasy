@@ -18,10 +18,11 @@ class ExampleTest extends TestCase
     {
         $response = $this->get('/')->assertOk();
 
-        // An explanation, and the way in.
-        $response->assertSee('Smart parking for a smart city');
-        $response->assertSee('Sign in');
+        // The way in. Asserted on the link rather than on any wording: the landing page's copy
+        // is meant to be edited freely, and a test that quotes the tagline fails every time
+        // somebody changes it without telling the suite.
         $response->assertSee(route('login'), false);
+        $response->assertSee('Sign in');
 
         // And it must not be the terminal in disguise: no gate, no card entry, no binding.
         $response->assertDontSee('Choose your gate');
