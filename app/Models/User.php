@@ -127,13 +127,25 @@ class User extends Authenticatable
             ->all();
     }
 
-    /** Does this user administer the given lot? */
-    public function administersLot(ParkingLot|int $lot): bool
+    /**
+     * Does this user administer the given lot?
+     *
+     * A null lot - an unlinked kiosk, a slot whose lot has gone - is a refusal rather than an
+     * error, and is answered after the super admin's exemption so that the break-glass account
+     * keeps its reach. `KioskPolicy::operate()` depends on it: without it, an operator opening
+     * a delinked gate's URL got a TypeError and a 500 instead of the 403 that was meant.
+     */
+    public function administersLot(ParkingLot|int|null $lot): bool
     {
         $ids = $this->administeredLotIds();
 
         if ($ids === null) {
             return true;
+        }
+
+        // Nobody administers a lot that does not exist, so nobody stands at its gate either.
+        if ($lot === null) {
+            return false;
         }
 
         return in_array($lot instanceof ParkingLot ? (int) $lot->id : (int) $lot, $ids, true);

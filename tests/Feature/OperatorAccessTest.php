@@ -203,6 +203,26 @@ class OperatorAccessTest extends TestCase
         $this->get('/?kiosk='.$this->entryB->key)->assertForbidden();
     }
 
+    public function test_an_operator_is_refused_a_delinked_gate(): void
+    {
+        $operator = $this->actingAsOperator([$this->lotA]);
+
+        $spare = Kiosk::create([
+            'name' => 'Spare', 'key' => 'spare', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => null,
+        ]);
+
+        // A delinked kiosk has no lot, so the lot check has nothing to place it in. That is a
+        // refusal and not a crash: the operator gets the same 403 as for a foreign lot rather
+        // than a 500 from administering a lot that does not exist. The super admin is still
+        // let in, since a broken terminal is exactly what they come to look at.
+        $this->assertFalse($operator->can('operate', $spare));
+
+        $this->get('/?kiosk=spare')->assertForbidden();
+
+        $this->actingAsSuperAdmin();
+        $this->get('/?kiosk=spare')->assertOk();
+    }
+
     public function test_an_operator_gets_the_kiosk_page_for_their_own_gate(): void
     {
         $this->actingAsOperator([$this->lotA]);
@@ -370,5 +390,122 @@ class OperatorAccessTest extends TestCase
             ->assertRedirect(route('home', ['kiosk' => 'b-entry']));
 
         $this->get('/')->assertOk()->assertSee('Entry B');
+    }
+
+    // ── Whose gate is it? ──────────────────────────────────────────────────────
+
+    public function test_a_gate_bound_by_one_shift_is_not_handed_to_the_next(): void
+    {
+        // The tablet is fixed hardware at a fixed gate, but the account signed in on it is
+        // not: the next shift belongs to another lot and must start at their own gate rather
+        // than standing at a stranger's barrier with a working scanner.
+        $first = $this->operator([$this->lotA], ['email' => 'first@parkeasy.test']);
+
+        $this->actingAs($first);
+        $this->get(route('home', ['kiosk' => 'a-entry']))->assertOk();
+
+        $this->post(route('logout'))->assertRedirect(route('login'));
+        $this->assertGuest();
+
+        // Signed out, the terminal still carries the binding - that is the whole point of the
+        // year-long cookie - so it is handed on to whoever signs in next. The account it was
+        // bound by travels with it.
+        $this->withCookie(ResolveKioskBinding::COOKIE_NAME, 'a-entry')
+            ->withCookie(ResolveKioskBinding::OWNER_COOKIE_NAME, (string) $first->id)
+            ->get(route('login'))
+            ->assertOk();
+
+        $this->assertSame('a-entry', session('kiosk_key'));
+
+        $this->signIn($this->operator([$this->lotB], ['email' => 'second@parkeasy.test']));
+
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('Entry A')
+            ->assertDontSee('This gate');
+
+        // Dropped outright, rather than left in the session to be re-checked on every later
+        // request: the binding was never this account's to keep.
+        $this->assertNull(session('kiosk_key'));
+    }
+
+    public function test_a_lot_admin_is_not_handed_another_lots_gate_on_the_same_browser(): void
+    {
+        // The same leak seen from the admin side, and the quieter one: staff are never
+        // authorised against a kiosk, so nothing refused them a foreign gate. The admin would
+        // simply be looking at another lot's terminal, scans and all, with no picker on screen
+        // to tell them so - because a bound terminal hides it.
+        $first = $this->operator([$this->lotA], ['email' => 'first@parkeasy.test']);
+
+        $this->actingAs($first);
+        $this->get(route('home', ['kiosk' => 'a-entry']))->assertOk();
+
+        $this->post(route('logout'));
+
+        $this->withCookie(ResolveKioskBinding::COOKIE_NAME, 'a-entry')
+            ->withCookie(ResolveKioskBinding::OWNER_COOKIE_NAME, (string) $first->id)
+            ->get('/')
+            ->assertOk();
+
+        $this->signIn($this->lotAdmin([$this->lotB], ['email' => 'la@parkeasy.test']));
+
+        // The terminal is where an admin lands to work, and unbound it offers the gates of
+        // their own lot.
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('Entry A')
+            ->assertDontSee('This gate')
+            ->assertSee('Entry B');
+
+        $this->assertNull(session('kiosk_key'));
+    }
+
+    public function test_a_gate_binding_survives_a_handover_between_operators_of_the_same_lot(): void
+    {
+        // The counterpart, so the ownership check cannot quietly become a re-bind on every
+        // shift change. The gate is the tablet's, not the account's: whoever signs in at a
+        // terminal already standing on that gate keeps it, and the binding is re-stamped for
+        // them. Only a gate they could never run is taken away.
+        $first = $this->operator([$this->lotA], ['email' => 'first@parkeasy.test']);
+
+        $this->actingAs($first);
+        $this->get(route('home', ['kiosk' => 'a-entry']))->assertOk();
+
+        $this->post(route('logout'));
+
+        $this->withCookie(ResolveKioskBinding::COOKIE_NAME, 'a-entry')
+            ->withCookie(ResolveKioskBinding::OWNER_COOKIE_NAME, (string) $first->id)
+            ->get(route('login'))
+            ->assertOk();
+
+        $second = $this->operator([$this->lotA], ['email' => 'second@parkeasy.test']);
+        $this->signIn($second);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Entry A')
+            ->assertSee('This gate');
+
+        $this->assertSame('a-entry', session('kiosk_key'));
+
+        // Re-stamped, so the binding now belongs to the account actually signed in.
+        $this->get('/')
+            ->assertCookie(ResolveKioskBinding::OWNER_COOKIE_NAME, (string) $second->id);
+    }
+
+    public function test_a_binding_made_before_it_was_owned_is_still_honoured(): void
+    {
+        // A gate tablet already carrying a kiosk cookie from before the binding was stamped
+        // with an account - and a first-time visitor who followed a QR code to a signed-out
+        // terminal, which is deliberately left unowned until somebody signs in. An absent
+        // owner means "not claimed yet", never "refused".
+        $lot = $this->lotA;
+        $this->actingAs($this->operator([$lot]));
+
+        $this->withCookie(ResolveKioskBinding::COOKIE_NAME, 'a-entry')
+            ->get('/')
+            ->assertOk()
+            ->assertSee('Entry A')
+            ->assertSee('This gate');
     }
 }

@@ -276,8 +276,9 @@ Standard Laravel auth scaffold; no routes currently use authentication.
 
 Appended to the `web` group in `bootstrap/app.php`, so it runs for full page loads *and*
 Livewire update requests. It decides which kiosk a browser is bound to and mirrors that
-binding into the session (`kiosk_key`) and a long-lived cookie (`parkeasy_kiosk`, one year,
-refreshed on each visit, `HttpOnly` + `secure` so the key is never readable from JS).
+binding into the session (`kiosk_key` + `kiosk_owner`) and a pair of long-lived cookies
+(`parkeasy_kiosk` + `parkeasy_kiosk_owner`, one year, refreshed on each visit, `HttpOnly` +
+`secure` so the key is never readable from JS).
 
 Resolution order is query string → session → cookie, narrowest scope first. An explicit
 `?kiosk=` always wins, so binding or moving a terminal is just a new URL and nothing needs
@@ -313,6 +314,31 @@ anonymous gate left to keep bound — and because this middleware is appended to
 `/lots` would outlive whatever the browser did next, so a guest gets the cookie cleared like
 any other non-operator rather than planted.
 
+**Whose binding it is.** Both stores also carry the id of the account that made the binding,
+because a *lifetime* and an *owner* are different questions and the two stores only ever
+answered the first. A gate tablet outlives the login — that is what the year-long cookie is
+for — but it also outlives the account, and the next person to sign in on it may be at a
+different lot. Without the owner stamp, two shifts sharing one tablet left the second standing
+at the first one's barrier: for an operator, a 403 on every page; for a lot admin, nothing at
+all, because staff are never authorised against a kiosk, so they simply got another lot's
+terminal with its scans, its feed and no picker on screen to say so.
+
+So a remembered binding that names somebody else is *released* rather than adopted, and the
+terminal falls back to offering that account its own gates. Three cases are deliberately not
+refused:
+
+- a signed-out browser, which cannot be told what it is not entitled to until somebody signs
+  in — and that request is the next one through the middleware, so the operator who followed a
+  printed QR link is put back at the gate rather than being logged out of it;
+- an **ownerless** binding, which is nobody's claim: a `?kiosk=` link followed while signed out,
+  or a tablet carrying a cookie from before the stamp existed;
+- a gate the incoming account could stand at anyway (`can('operate')` or `can('view')`), which
+  is re-stamped for them. The gate belongs to the tablet, not the account, so a handover
+  between two operators of one lot must not cost a re-bind.
+
+An explicit `?kiosk=` is never owner-checked: it carries no owner and is adopted outright, so
+re-binding a terminal is still just opening the other URL.
+
 Because the middleware is appended to the `web` group it runs *before* route middleware, so it
 also resolves and remembers a `?kiosk=` link on a browser that is currently signed out. That
 binding is then what puts the operator back at their own gate after they sign in, and the
@@ -328,8 +354,10 @@ permission test there would hand the break-glass account the same treatment as g
 quietly bind the super admin's own laptop to a gate.
 
 An operator is additionally held to their own lot: `Gate::authorize('operate', $kiosk)` runs
-whenever the resolved kiosk came from a request with an operator on it, so another lot's kiosk
-is a 403 rather than a page that silently renders unbound.
+whenever the kiosk came from the query string on a request with an operator on it, so another
+lot's kiosk is a 403 rather than a page that silently renders unbound. A binding *inherited*
+from the previous shift never reaches that check — it is released above, because nobody asked
+for it, and a 403 would be the wrong answer to a question this account did not pose.
 
 `ForgetKioskController` (`GET /kiosk/forget`) is the manual escape hatch for a shared machine
 that was bound once; it delegates to `release()`, which clears both stores, and because
