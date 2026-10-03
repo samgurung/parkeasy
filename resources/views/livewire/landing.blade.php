@@ -1,15 +1,3 @@
-{{-- What a signed-out visitor gets at /. Explains the app and offers the way in, because
-     "redirect to /login" is a wall with no explanation on it: it tells a first-time visitor
-     what they may not see, but not what they are signing in to.
-
-     Deliberately short. A visitor who came from a link or a QR code wants to know what this
-     is and how to get in, not to be walked through the feature set - the app itself is the
-     demonstration, and a long pitch is the thing that gets in the way of signing in.
-
-     Copy stays confined to what the app actually does. In particular the fee is *computed*
-     per stay from the lot's rate, not collected - there is no payment, so nothing here
-     promises one. --}}
-
 <div class="relative flex min-h-[calc(100dvh_-_4rem)] w-full flex-col overflow-hidden bg-[#070312] text-white">
     <div class="kiosk-bg absolute inset-0"></div>
     <div class="kiosk-orb pointer-events-none absolute -top-32 -left-24 h-96 w-96 rounded-full bg-teal-400 opacity-20 blur-[120px]"></div>
@@ -24,10 +12,20 @@
             Smart Parking for <br class="hidden sm:block" /> A Smart City.
         </h1>
 
-        <p class="mt-6 max-w-xl text-lg leading-relaxed text-white/60">
-            RFID cards scan in and out at the gate, slot occupancy detection via IR sensors,
-            and real time parking lot occupancy rate information.
-        </p>
+        <ul class="mt-6 flex max-w-xl flex-col gap-3 text-lg leading-relaxed text-white/60">
+            <li class="flex items-start gap-3">
+                <i class="fas fa-id-card mt-1 shrink-0 text-teal-300"></i>
+                <span>RFID card scans extry and exit</span>
+            </li>
+            <li class="flex items-start gap-3">
+                <i class="fas fa-signal mt-1 shrink-0 text-teal-300"></i>
+                <span>Slot occupancy detection via IR sensors</span>
+            </li>
+            <li class="flex items-start gap-3">
+                <i class="fas fa-gauge-high mt-1 shrink-0 text-teal-300"></i>
+                <span>Real time parking lot occupancy rate information</span>
+            </li>
+        </ul>
 
         <div class="mt-9 flex flex-wrap items-center gap-3">
             <a href="{{ route('login') }}"
