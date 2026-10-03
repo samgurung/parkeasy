@@ -79,11 +79,30 @@
                 </div>
             </main>
         @else
-            @if (!$kioskLotNumber)
+            @if ($kioskKey === null)
+                {{-- Nothing bound. Whether this is a dead end or one tap from a working gate
+                     depends entirely on whether this account has a way to pick, so the wording
+                     does too. --}}
+                <p @class([
+                        'mt-2 text-center text-sm font-bold',
+                        'text-white/60' => $pickableKiosks->isNotEmpty(),
+                        'text-amber-300' => $pickableKiosks->isEmpty(),
+                    ])>
+                    @if ($pickableKiosks->isNotEmpty())
+                        No kiosk is bound to this terminal. Pick one below to start scanning.
+                    @else
+                        <i class="fas fa-triangle-exclamation mr-1"></i>
+                        This kiosk is not linked to a parking lot. Register it in the admin panel and open it with
+                        <span class="font-mono text-amber-200">/?kiosk=&lt;key&gt;</span>
+                    @endif
+                </p>
+            @elseif (!$kioskLotNumber)
+                {{-- Bound to a real kiosk that has no lot. A different fault from being
+                     unbound, and one only staff can fix. --}}
                 <p class="mt-2 text-center text-sm font-bold text-amber-300">
                     <i class="fas fa-triangle-exclamation mr-1"></i>
-                    This kiosk is not linked to a parking lot. Register it in the admin panel and open it with
-                    <span class="font-mono text-amber-200">/?kiosk=&lt;key&gt;</span>
+                    No parking lot is linked to this kiosk. Fix it in
+                    <a class="underline" href="{{ route('admin.kiosks') }}">the kiosk setup page</a>.
                 </p>
             @endif
 
@@ -105,13 +124,47 @@
                 </div>
             </div>
         @endif
-        @if ($kioskType)
+        {{-- Each branch owns its baseline: hint() restores whatever this state says, so an
+             unbound terminal never ends up told "Scan your card" by a timer. --}}
+        @if ($kioskKey === null)
+            <p id="kiosk-hint" class="mt-6 text-center text-lg text-white/85">Choose a kiosk to start scanning</p>
+        @elseif ($kioskType)
             <p id="kiosk-hint" class="mt-6 text-center text-lg text-white/85">Scan your card</p>
         @else
             <p id="kiosk-hint" class="mt-6 text-center text-lg font-bold text-amber-300">
                 <i class="fas fa-triangle-exclamation mr-1"></i>
                 This kiosk has no gate type. Set it to ENTRY or EXIT in the admin panel to start scanning.
             </p>
+        @endif
+
+        @if ($pickableKiosks->isNotEmpty())
+            {{-- Which kiosk this terminal runs, for whoever manages kiosks.
+
+                 Only ever rendered unbound. This is the way back from /kiosk/forget, which
+                 now returns to the terminal rather than to the kiosk setup page, so arriving
+                 here unbound is the ordinary way staff reach it - and once a gate is bound
+                 the page is meant to be showing that gate, not offering a different one.
+
+                 Kiosks that cannot scan - no lot, or no gate type - are listed rather than
+                 hidden. They are exactly what an admin is here to find, and the label says
+                 which half is missing before the tap. --}}
+            <div class="mt-6 flex justify-center">
+                <label class="flex w-full max-w-2xl items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 shadow-2xl backdrop-blur-xl"
+                    for="kiosk-picker">
+                    <span class="shrink-0 text-xs font-bold uppercase tracking-[0.25em] text-white/60">
+                        <i class="fas fa-tower-broadcast mr-1"></i>Kiosk
+                    </span>
+                    <select id="kiosk-picker"
+                        class="w-full min-w-0 rounded-xl border border-white/20 bg-[#0d0722] px-3 py-2 text-sm font-bold uppercase tracking-widest text-white outline-none focus:border-sky-400 focus:bg-[#140b30]">
+                        <option value="" selected disabled>Choose a kiosk</option>
+                        @foreach ($pickableKiosks as $pickable)
+                            {{-- One line: an <option> broken across lines indents the text, and
+                                 the label has to stay a single readable string. --}}
+                            <option value="{{ $pickable->key }}">{{ $pickable->name }} — {{ $pickable->parkingLot?->name ?? 'no lot' }} · {{ $pickable->type === null ? 'no gate type' : \Illuminate\Support\Str::upper($pickable->type) }}</option>
+                        @endforeach
+                    </select>
+                </label>
+            </div>
         @endif
 
         @php
@@ -229,9 +282,11 @@
 
                      Asking the role instead meant offering the escape hatch to the person
                      least likely to need it. A lot admin working a gate on a tablet because
-                     the lot has no dedicated operator is the case that matters, and they
-                     have no picker to fall back on, so without this they were stranded on a
-                     gate with no way off it short of clearing site data by hand. --}}
+                     the lot has no dedicated operator is the case that matters.
+
+                     Which is why this and the picker above are a pair: the picker only exists
+                     unbound, and unbinding lands back here rather than on another page, so
+                     "wrong gate" is answered without leaving the terminal. --}}
                 <a href="{{ route('kiosk.forget') }}"
                     class="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-white/60 transition hover:bg-white/15 hover:text-white">
                     <i class="fas fa-link-slash mr-1"></i> Not this kiosk? Unbind
@@ -480,6 +535,24 @@
             // cannot scan at all - the backend refuses those.
             const kioskType = @json($kioskType);
 
+            // Why a scan cannot go through right now, or null when it can.
+            //
+            // One place, because three call sites need the answer - the hardware buffer, the
+            // manual field and submitScan() - and they used to each check a different thing.
+            // The most common reason is not the last one checked: an unbound terminal has no
+            // kiosk at all, so blaming "no gate type" for it named a fault in a kiosk that
+            // was never chosen. Order is most-fundamental first, for that reason.
+            function scanBlocked() {
+                if (!kioskKey) return 'Pick a kiosk first';
+                if (!kioskLot) return 'This kiosk is not linked to a parking lot';
+                if (!kioskType) return 'This kiosk has no gate type';
+                return null;
+            }
+
+            // This state's baseline hint, so hint() can restore it rather than hardcoding
+            // "Scan your card" - which would be a lie on an unbound terminal.
+            const hintDefault = hintEl.textContent.trim();
+
             function chipShow(label, bgClass) {
                 chipEl.classList.remove('hidden');
                 chipEl.className = 'rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-white ' +
@@ -495,7 +568,7 @@
                 hintEl.textContent = text;
                 hintEl.style.color = '#fcd34d';
                 setTimeout(() => {
-                    hintEl.textContent = 'Scan your card';
+                    hintEl.textContent = hintDefault;
                     hintEl.style.color = '';
                 }, 2600);
             }
@@ -729,11 +802,12 @@
                     recentList.removeChild(recentList.lastChild);
                 }
             }
-
-            async function submitScan(code) {
+async function submitScan(code) {
                 if (busy || !code) return;
-                if (!kioskLot) {
-                    hint('This kiosk is not linked to a parking lot');
+
+                const blocked = scanBlocked();
+                if (blocked) {
+                    hint(blocked);
                     return;
                 }
                 busy = true;
@@ -788,13 +862,29 @@
             }
 
             // The gate panes are indicators only. Attract the manual field once so the
-            // attendant can type a card straight after page load.
-            if (kioskType) manual.focus();
+            // attendant can type a card straight after page load - but only when a
+            // scan could actually go through, or the caret lands in a field that will
+            // only ever refuse.
+            if (!scanBlocked()) manual.focus();
 
             resultClose.addEventListener('click', () => closeResult());
             enrolClose.addEventListener('click', () => closeEnrolment());
             enrolCancel.addEventListener('click', () => closeEnrolment());
             enrolSubmit.addEventListener('click', () => submitEnrolment());
+
+            // Staff kiosk picker. A plain navigation rather than a Livewire round trip,
+            // because choosing a gate binds the whole terminal - the lot behind the
+            // scanner, the broadcast channel it listens on, the direction a scan counts
+            // as - and that binding is recorded by ResolveKioskBinding on a GET. So this
+            // is the same thing as clicking "Open kiosk" on the setup page, one page over.
+            const picker = document.getElementById('kiosk-picker');
+            if (picker) {
+                picker.addEventListener('change', function() {
+                    if (!this.value) return;
+                    window.location.href = window.location.pathname + '?kiosk=' +
+                        encodeURIComponent(this.value);
+                });
+            }
             // Enter anywhere in the form submits; the kiosk is keyboard-driven.
             enrolOverlay.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') {
@@ -811,11 +901,12 @@
             manual.addEventListener('keydown', (e) => {
                 if (e.key !== 'Enter' || busy) return;
                 e.preventDefault();
-                const code = manual.value.trim().toUpperCase();
-                if (!kioskType) {
-                    hint('This kiosk has no gate type');
+                const blocked = scanBlocked();
+                if (blocked) {
+                    hint(blocked);
                     return;
                 }
+                const code = manual.value.trim().toUpperCase();
                 if (!code) {
                     hint('Type a card number');
                     return;
@@ -830,8 +921,9 @@
                     const code = buffer.trim();
                     buffer = '';
                     readout.textContent = '';
-                    if (!kioskType) {
-                        hint('This kiosk has no gate type');
+                    const blocked = scanBlocked();
+                    if (blocked) {
+                        hint(blocked);
                         return;
                     }
                     if (!code) {

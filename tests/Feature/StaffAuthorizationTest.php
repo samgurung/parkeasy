@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\ResolveKioskBinding;
 use App\Livewire\Admin\FloorManager;
 use App\Livewire\Admin\KioskManager;
 use App\Livewire\Admin\LotManager;
@@ -529,6 +530,159 @@ class StaffAuthorizationTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseHas('kiosks', ['id' => $mine->id, 'parking_lot_id' => $this->lotA->id]);
+    }
+
+    // ── Choosing a kiosk from the terminal ─────────────────────────────────────
+
+    public function test_staff_are_offered_their_kiosks_on_an_unbound_terminal(): void
+    {
+        // The case this closes. Staff could open a gate from the kiosk setup page, but the
+        // entry/exit screen could not pick one - so landing on it unbound produced a dead page
+        // whose only way to a working gate was to go back to the setup page.
+        Kiosk::create(['name' => 'A Entry', 'key' => 'a-entry', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => $this->lotA->id]);
+        Kiosk::create(['name' => 'A Exit', 'key' => 'a-exit', 'type' => Kiosk::TYPE_EXIT, 'parking_lot_id' => $this->lotA->id]);
+
+        $this->actingAsLotAdmin([$this->lotA]);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('id="kiosk-picker"', false)
+            // The key is the option's value because selecting it navigates to ?kiosk=<key>,
+            // which is what ResolveKioskBinding binds from.
+            ->assertSee('value="a-entry"', false)
+            ->assertSee('value="a-exit"', false);
+    }
+
+    public function test_the_terminal_picker_is_scoped_to_the_lots_a_lot_admin_administers(): void
+    {
+        // Otherwise the picker would be a lot-scoping hole with a dropdown on it: naming
+        // another lot's gate is the same disclosure as listing its kiosks.
+        Kiosk::create(['name' => 'A Entry', 'key' => 'a-entry', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => $this->lotA->id]);
+        Kiosk::create(['name' => 'B Entry', 'key' => 'b-entry', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => $this->lotB->id]);
+
+        $this->actingAsLotAdmin([$this->lotA]);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('A Entry')
+            ->assertDontSee('B Entry');
+    }
+
+    public function test_a_super_admin_is_offered_every_kiosk_including_unattached_ones(): void
+    {
+        Kiosk::create(['name' => 'A Entry', 'key' => 'a-entry', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => $this->lotA->id]);
+        Kiosk::create(['name' => 'Spare Kiosk', 'key' => 'spare', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => null]);
+
+        $this->actingAsSuperAdmin();
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('A Entry')
+            ->assertSee('Spare Kiosk');
+    }
+
+    public function test_the_picker_marks_the_kiosks_that_cannot_scan(): void
+    {
+        // Hidden instead of labelled would defeat the point: a kiosk with no gate type is
+        // exactly what an admin opens the terminal to diagnose, and the label says which
+        // half of the configuration is missing before they tap.
+        Kiosk::create(['name' => 'A Entry', 'key' => 'a-entry', 'type' => null, 'parking_lot_id' => $this->lotA->id]);
+
+        $this->actingAsLotAdmin([$this->lotA]);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('A Entry — Lot A · no gate type');
+    }
+
+    public function test_the_picker_disappears_once_a_kiosk_is_bound(): void
+    {
+        // The terminal's job is to be one gate. A dropdown left on screen would be a second
+        // way to change the binding on the page that is meant to be showing a single gate -
+        // and Unbind is the deliberate way back to a choice.
+        Kiosk::create(['name' => 'A Entry', 'key' => 'a-entry', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => $this->lotA->id]);
+        Kiosk::create(['name' => 'A Exit', 'key' => 'a-exit', 'type' => Kiosk::TYPE_EXIT, 'parking_lot_id' => $this->lotA->id]);
+
+        $this->actingAsLotAdmin([$this->lotA]);
+
+        $this->get(route('home', ['kiosk' => 'a-entry']))
+            ->assertOk()
+            ->assertDontSee('id="kiosk-picker"', false)
+            ->assertSee('A Entry')
+            ->assertSee('Not this kiosk? Unbind');
+    }
+
+    public function test_staff_unbind_returns_to_the_terminal_with_the_picker_again(): void
+    {
+        // The pair, and the reason the picker is gated on being unbound: Unbind used to send
+        // staff to /admin/kiosks, which dropped them out of the terminal to reach a page that
+        // names kiosks but shows no gate - so "wrong gate" was answered by leaving.
+        Kiosk::create(['name' => 'A Entry', 'key' => 'a-entry', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => $this->lotA->id]);
+        Kiosk::create(['name' => 'A Exit', 'key' => 'a-exit', 'type' => Kiosk::TYPE_EXIT, 'parking_lot_id' => $this->lotA->id]);
+
+        $this->actingAsLotAdmin([$this->lotA]);
+
+        $this->get(route('home', ['kiosk' => 'a-entry']))->assertOk();
+
+        $this->get(route('kiosk.forget'))
+            ->assertRedirect(route('home'))
+            ->assertCookieExpired(ResolveKioskBinding::COOKIE_NAME);
+
+        $this->assertNull(session('kiosk_key'));
+
+        // Same URL, unbound, picker restored. Not /admin/kiosks.
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('id="kiosk-picker"', false)
+            ->assertSee('value="a-entry"', false)
+            ->assertSee('value="a-exit"', false);
+    }
+
+    public function test_an_unbound_staff_terminal_does_not_blame_the_gate_type(): void
+    {
+        // "This kiosk has no gate type" blames a kiosk that was never chosen. With nothing
+        // bound there is no kiosk to have a type, so the page has to name what is missing.
+        Kiosk::create(['name' => 'A Entry', 'key' => 'a-entry', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => $this->lotA->id]);
+
+        $this->actingAsLotAdmin([$this->lotA]);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertSee('No kiosk is bound to this terminal')
+            ->assertSee('Choose a kiosk to start scanning')
+            // Asserted on the full sentence, because scanBlocked() in the inline JS keeps the
+            // short prefix as its own fallback message and that copy is correct there.
+            ->assertDontSee('This kiosk has no gate type. Set it to ENTRY');
+    }
+
+    public function test_staff_with_no_kiosks_get_no_picker(): void
+    {
+        // An admin whose lot has no kiosks yet needs the setup page, not an empty control,
+        // and the warning that sends them there has to survive.
+        $this->actingAsLotAdmin([$this->lotA]);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertDontSee('id="kiosk-picker"', false)
+            ->assertSee('This kiosk is not linked to a parking lot');
+    }
+
+    public function test_an_account_that_cannot_manage_kiosks_get_no_picker(): void
+    {
+        // Failing closed: runnableKiosks() is unbounded for a super admin, so the picker is
+        // gated on the permission rather than handed to anyone who can sign in.
+        Kiosk::create(['name' => 'A Entry', 'key' => 'a-entry', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => $this->lotA->id]);
+
+        $user = User::create([
+            'name' => 'No Role', 'email' => 'norole-picker@parkeasy.test', 'password' => Hash::make('password'),
+        ]);
+
+        $this->actingAs($user);
+
+        $this->get(route('home'))
+            ->assertOk()
+            ->assertDontSee('id="kiosk-picker"', false)
+            ->assertDontSee('A Entry');
     }
 
     // ── The vehicle registry is site-wide ──────────────────────────────────────

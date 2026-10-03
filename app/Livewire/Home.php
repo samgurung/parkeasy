@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Access;
 use App\Models\Entry;
 use App\Models\Kiosk;
 use Illuminate\Support\Carbon;
@@ -45,18 +46,20 @@ class Home extends Component
             'kioskLotNumber' => $kiosk?->parkingLot?->lot_number,
             'kioskLotName' => $kiosk?->parkingLot?->name,
             'gateChoices' => $kiosk === null ? $this->gateChoices() : collect(),
+            // Only when unbound, for the same reason: the control exists to answer "which
+            // kiosk?", and a bound terminal has already answered it.
+            'pickableKiosks' => $kiosk === null ? $this->pickableKiosks() : collect(),
         ]);
     }
 
     /**
      * The gates an operator may run, so the unbound terminal can offer them a choice.
      *
-     * Operators only, and that is a distinction of *page*, not of reach. Staff unbinding go
-     * to the admin kiosk list rather than here, because that is where they manage kiosks and
-     * navigate between gates; the picker is an operator's start-of-shift decision - entry or
-     * exit is a genuine choice, and the answer has to be recorded in the binding rather than
-     * guessed at. Staff have no such decision to make, and offering them the terminal's
-     * picker would blur a page that is deliberately not theirs.
+     * Operators only, and that is a distinction of *page*, not of reach. The picker is an
+     * operator's start-of-shift decision - entry or exit is a genuine choice, and the answer
+     * has to be recorded in the binding rather than guessed at - so it replaces the terminal
+     * outright, at barrier-tablet touch sizes. Staff have no such decision: they pick which
+     * gate to look at, so they get pickableKiosks() below instead.
      *
      * @return Collection<int, Kiosk>
      */
@@ -68,7 +71,36 @@ class Home extends Component
             return collect();
         }
 
-        return $user->operableKiosks()->load('parkingLot');
+        return $user->operableKiosks();
+    }
+
+    /**
+     * The kiosks a staff member may pick, for the dropdown above the gate panes.
+     *
+     * Shown only when nothing is bound, and it is a picker rather than a switcher because of
+     * what "unbind" now means: the terminal's own escape hatch returns here, so arriving
+     * unbound is the ordinary way a staff member reaches this control. A dropdown that stayed
+     * on screen while a gate was live would be a second, competing way to change the binding
+     * on the page that is supposed to be showing one gate.
+     *
+     * Staff who can manage kiosks, and nobody else. An operator already has the card picker
+     * above, which asks the same question with larger targets; a second control would give one
+     * decision two answers. An account with no role gets nothing, because runnableKiosks() is
+     * unbounded for a super admin and would otherwise hand it the whole kiosk table.
+     *
+     * @return Collection<int, Kiosk>
+     */
+    protected function pickableKiosks(): Collection
+    {
+        $user = auth()->user();
+
+        // The permission rather than the role, so a role granted kiosks.manage gets the
+        // dropdown without anyone having to remember to update this check as well.
+        if (! $user?->can(Access::MANAGE_KIOSKS)) {
+            return collect();
+        }
+
+        return $user->runnableKiosks();
     }
 
     /**

@@ -24,10 +24,12 @@ use Illuminate\Support\Facades\Route;
 // codes. Putting the terminal behind a path prefix would have invalidated every one.
 Route::get('/', Home::class)->name('home');
 
-// Release this browser from a kiosk it is bound to, so a shared machine can go back to
-// being a plain kiosk viewer. Re-binding is just opening another gate's ?kiosk= URL.
-// Left public: it discards a binding rather than revealing anything, and it has to keep
-// working for a browser that is signed out.
+// Release this browser from a kiosk it is bound to, and return it to the terminal, where
+// the account's way of picking a kiosk is offered again - the operator's card picker or a
+// staff member's dropdown. Role-independent, because unbinding is not "go and manage
+// kiosks", it is "stop showing me this gate". Re-binding is just opening another gate's
+// ?kiosk= URL. Left public: it discards a binding rather than revealing anything, and it
+// has to keep working for a browser that is signed out.
 Route::get('/kiosk/forget', ForgetKioskController::class)->name('kiosk.forget');
 
 // Live parking occupancy dashboard (driven by ESP32 IR slot sensors). Still public: these are

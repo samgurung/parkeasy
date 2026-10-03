@@ -180,7 +180,7 @@
                                             ? 'This lot has no floors configured yet.'
                                             : ($lot->slots_count === 0 ? 'This lot has no slots configured yet.' : null));
                                 @endphp
-                                <a href="{{ route('home') }}?kiosk={{ $kiosk->key }}" target="_blank" rel="noopener"
+                                <a href="{{ route('home') }}?kiosk={{ $kiosk->key }}" rel="noopener"
                                    title="{{ $lotReady ? 'Open kiosk terminal' : $lotReadyReason }}"
                                    @class([
                                        'rounded-xl border px-4 py-2 text-xs font-black uppercase tracking-widest transition',

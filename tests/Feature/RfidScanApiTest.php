@@ -841,7 +841,7 @@ class RfidScanApiTest extends TestCase
         $this->get('/')->assertOk()->assertDontSee('Not this kiosk? Unbind');
     }
 
-    public function test_a_staff_unbind_lands_on_the_admin_kiosk_list(): void
+    public function test_a_staff_unbind_lands_back_on_the_terminal(): void
     {
         $lot = $this->makeLot(self::LOT_A);
         $this->makeKiosk($lot, Kiosk::TYPE_ENTRY, 'main-gate', 'Main Gate');
@@ -856,12 +856,12 @@ class RfidScanApiTest extends TestCase
 
         $this->get('/?kiosk=main-gate')->assertOk()->assertSee('Main Gate');
 
-        // Staff go to the admin kiosk list, not to the terminal. That page is where they
-        // manage kiosks and navigate between gates, and the terminal's picker is an
-        // operator's start-of-shift choice rather than a staff page - sending them there
-        // would show a lot admin a gate picker they are not meant to run gates from.
+        // Staff used to be sent to /admin/kiosks, which is the one destination that made
+        // unbind a detour: it dropped them out of the terminal to reach a page that names
+        // kiosks but shows no gate. The terminal offers a kiosk dropdown when unbound, so
+        // the answer belongs here for everyone - one less role in the redirect.
         $this->get(route('kiosk.forget'))
-            ->assertRedirect(route('admin.kiosks'));
+            ->assertRedirect(route('home'));
 
         $this->assertNull(session('kiosk_key'));
     }

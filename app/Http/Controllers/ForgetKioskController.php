@@ -17,6 +17,10 @@ use Illuminate\Http\Request;
  * to operators. It is a public route and mutates nothing but the caller's own binding, so it
  * was never a boundary - and gating it on the role meant the person most likely to be
  * stranded on a gate (a lot admin covering a shift) was the one shown no way off.
+ *
+ * Always returns to the terminal rather than to a page chosen by role, because the point of
+ * unbinding is to choose a kiosk somewhere else, and the terminal is where that choice is
+ * made. `/admin/kiosks` was the previous answer for staff and made this a detour.
  */
 class ForgetKioskController
 {
@@ -27,22 +31,19 @@ class ForgetKioskController
         // that is meant to clear it.
         ResolveKioskBinding::release($request);
 
-        // Staff and operators are sent to different pages, because "unbind" means different
-        // things to them and the two pages are already distinct.
+        // Back to the terminal, for everyone. Unbinding is not "go and manage kiosks", it is
+        // "stop showing me this gate" - so the answer is the page you were just looking at,
+        // unbound, which now offers whatever way this account picks a kiosk: the operator's
+        // card picker or a staff member's dropdown.
         //
-        // An operator unbinds in order to *choose* which gate to run next, so they land on
-        // the unbound terminal, where the picker is offered. Staff are managing kiosks, so
-        // they land on the admin kiosk list - the page they navigate between gates from, and
-        // the one that answers "which kiosk is this?" with a list rather than a gate picker
-        // that is not theirs to use.
+        // Sending staff to the admin kiosk list instead was the one destination that made
+        // this a dead end: it dropped you out of the terminal you were unbinding to reach a
+        // page that names kiosks but cannot show you a gate, and getting back meant coming
+        // here again. Staying put keeps the two actions adjacent - unbind, then pick.
         //
-        // Neither may be landingUrl(). For an operator with a single operable kiosk that
-        // returns /?kiosk=<key>, which would re-bind them one redirect later and turn the
-        // button into a silent no-op.
-        if ($request->user()?->canUseAdminPanel()) {
-            return redirect()->route('admin.kiosks');
-        }
-
+        // Never landingUrl(). For an operator with a single operable kiosk that returns
+        // /?kiosk=<key>, which would re-bind them one redirect later and turn the button into
+        // a silent no-op.
         return redirect()->route('home');
     }
 }

@@ -142,9 +142,37 @@ class User extends Authenticatable
     // ── Where to send someone ─────────────────────────────────────────────────
 
     /**
-     * The kiosks this user may run, in their lots. The gate terminal's picker and the
-     * post-login redirect are both driven from this, so an operator sees the same set of
-     * gates in both places.
+     * Every kiosk this user may open a terminal for: the kiosks in the lots they
+     * administer, and for a super admin every kiosk including the unclaimed ones.
+     *
+     * Deliberately wider than operableKiosks(). Configuring a kiosk is a lot admin's job
+     * and standing at one is an operator's, but both have to be able to *reach* a gate
+     * page: a lot admin covers the gate themselves when a lot has no dedicated operator,
+     * and the terminal is how either of them checks a kiosk before handing it over. An
+     * unclaimed kiosk is included for the super admin because the broken page it produces -
+     * no lot, no gate type - is exactly what an admin needs to see while diagnosing it.
+     *
+     * @return Collection<int, Kiosk>
+     */
+    public function runnableKiosks(): Collection
+    {
+        return Kiosk::query()
+            // A null lot list means the super admin, who is not restricted to a whereIn.
+            ->when(
+                ($lotIds = $this->administeredLotIds()) !== null,
+                fn ($query) => $query->whereIn('parking_lot_id', $lotIds),
+            )
+            // Eager loaded because every caller renders the lot name beside the kiosk name.
+            ->with('parkingLot')
+            ->orderBy('parking_lot_id')
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * The kiosks this user may run as gate staff, in their lots. The gate terminal's picker
+     * and the post-login redirect are both driven from this, so an operator sees the same
+     * set of gates in both places.
      *
      * @return Collection<int, Kiosk>
      */
@@ -154,11 +182,7 @@ class User extends Authenticatable
             return new Collection;
         }
 
-        return Kiosk::query()
-            ->whereIn('parking_lot_id', $this->administeredLotIds() ?? [])
-            ->orderBy('parking_lot_id')
-            ->orderBy('name')
-            ->get();
+        return $this->runnableKiosks();
     }
 
     /**

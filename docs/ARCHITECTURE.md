@@ -35,7 +35,7 @@ database structure, the models, the controllers, and the Livewire components.
 
 | Actor | Description |
 |---|---|
-| **Kiosk terminal** | A browser page (`/` + `?kiosk=<key>`) on a tablet behind a gate, **behind a login** — it is the entry and exit screen, so reaching it means being somebody. Each kiosk is registered as an ENTRY or EXIT gate, so the card only has to be scanned — a hardware RFID reader on the keyboard-USB bus or manual typing, with no direction to pick. Normally run by an **operator** (below) signing in once per shift; a lot admin or super admin may also open it to preview a gate. |
+| **Kiosk terminal** | A browser page (`/` + `?kiosk=<key>`) on a tablet behind a gate, **behind a login** — it is the entry and exit screen, so reaching it means being somebody. Each kiosk is registered as an ENTRY or EXIT gate, so the card only has to be scanned — a hardware RFID reader on the keyboard-USB bus or manual typing, with no direction to pick. Normally run by an **operator** (below) signing in once per shift; a lot admin or super admin may also open it to preview a gate, and picks that gate with a **kiosk dropdown** on the terminal itself — shown only when nothing is bound, so "wrong gate" is Unbind followed by one tap rather than a trip to `/admin/kiosks`. |
 | **ESP32 IR sensor node** | A low-cost board with one or more IR beam sensors per slot. It fires an HTTP POST to `/api/slot-status` each time a beam is broken/restored. |
 | **Super admin** | Exactly one account, attached to no lots and therefore reaching every lot. Owns site-wide configuration (creating lots), the corrections that touch other people's records (editing/deleting vehicle registrations), and staff accounts. |
 | **Lot admin** | Attached to one or more lots via `user_parking_lot`. Manages the operational shape of their own lots — floors, slot counts, kiosks, and the card registry — and can bind a card to a vehicle at the gate. Sign-in lands them in the `/admin/*` panel. |
@@ -105,8 +105,8 @@ All web routes render a Livewire component in the shared `components.layouts.app
 
 | Method | Path | Name | Livewire component | Purpose |
 |---|---|---|---|---|
-| GET | `/` | `home` | `App\Livewire\Home` | **Two pages behind one URL**, branched in `Home::render()`: a guest gets the **landing page** (`livewire.landing` — one line on what the app is, and a Sign in button); once signed in it is the **kiosk terminal**. `?kiosk=<key>` binds it to a registered kiosk (an operator's binding is remembered across browser restarts); shows the ENTRY/EXIT gate indicator, manual card input, and a recent-scan feed. An operator with no kiosk resolved gets a **picker** of the gates in their own lot instead. |
-| GET | `/kiosk/forget` | `ForgetKioskController` | Releases the browser from its bound kiosk (clears the cookie + session). Operators are sent to the unbound terminal, where the gate picker is; staff to the admin kiosk list. |
+| GET | `/` | `home` | `App\Livewire\Home` | **Two pages behind one URL**, branched in `Home::render()`: a guest gets the **landing page** (`livewire.landing` — one line on what the app is, and a Sign in button); once signed in it is the **kiosk terminal**. `?kiosk=<key>` binds it to a registered kiosk (an operator's binding is remembered across browser restarts); shows the ENTRY/EXIT gate indicator, manual card input, and a recent-scan feed. An operator with no kiosk resolved gets a **picker** of the gates in their own lot instead. Staff who can manage kiosks get a **kiosk selector** above the gate panes to switch or pick one. |
+| GET | `/kiosk/forget` | `ForgetKioskController` | Releases the browser from its bound kiosk (clears the cookie + session) and returns to the **terminal**, where whatever way this account picks a kiosk is offered again — the operator's card picker or a staff member's dropdown. Role-independent: unbinding is not "go and manage kiosks", it is "stop showing me this gate". |
 | GET | `/lots` | `lots.overview` | `App\Livewire\LotOverview` | Live **lot report** — all lots with free/occupied counts, per-type (2W/4W) occupancy, search, sort. Polls every 10s. |
 | GET | `/slots` | `slots.dashboard` | `App\Livewire\SlotDashboard` | Live **slot monitor** — per-floor schematic of slot tiles; updates instantly over Echo. Lot selector + link to floor config. |
 | GET | `/admin/floors` | `admin.floors` | `App\Livewire\Admin\FloorManager` | Create/edit/delete **floors & slots**, and designate per-slot 2W/4W type. Supports `?lot=<id>` to scope the list. |
@@ -346,17 +346,17 @@ Asking the role instead offered the escape hatch to the person least likely to n
 admin covering a shift at a gate on a tablet, because the lot has no dedicated operator, was
 shown no way off a bound gate at all.
 
-Where it sends you depends on what "unbind" means to you, because the two roles are on two
-different pages already. An operator unbinds in order to *choose* which gate to run next, so
-they land on the unbound terminal where the picker is offered. Staff are managing kiosks, so
-they land on `/admin/kiosks` — the list they navigate between gates from, and a page that
-answers "which kiosk is this?" in the terms they work in. The terminal's picker is
-deliberately not opened up to staff for this: entry-or-exit is an operator's start-of-shift
-decision, and staff are sent to the list instead.
+It always returns to `/`. Unbinding is not "go and manage kiosks", it is "stop showing me this
+gate", so the answer is the page you were just looking at — unbound, where the way this account
+picks a kiosk is offered again. `landingUrl()` is never used here: for an operator with a single
+operable kiosk it returns `/?kiosk=<key>`, which would re-bind them one redirect later and turn
+the button into a silent no-op.
 
-Neither destination may be `landingUrl()`. For an operator with a single operable kiosk that
-returns `/?kiosk=<key>`, which would re-bind them one redirect later and turn the button into
-a silent no-op.
+Staff used to be sent to `/admin/kiosks` instead, which was the one destination that made this a
+detour — it dropped you out of the terminal to reach a page that names kiosks but shows no gate,
+so answering "wrong gate" meant leaving the terminal and coming back. Sending everyone to `/`
+removes a role from the redirect entirely, and is only possible because the terminal now offers
+staff a kiosk dropdown of their own (see §7.1).
 
 ### 5B. `EnsureCanUseAdminPanel` (`app/Http/Middleware/EnsureCanUseAdminPanel.php`)
 
@@ -517,6 +517,30 @@ All components are **class-based** (Livewire 4). They render the Blade views und
 - The bound `Kiosk` (and its lot) is resolved by `ResolveKioskBinding` middleware before the
   component runs, from the `?kiosk=` query string, else the remembered cookie. If no
   real kiosk resolves, the page warns the attendant.
+- Two ways to pick a kiosk, for two different roles, and deliberately not interchangeable.
+  Neither control exists once a kiosk is bound — the terminal's job is to be one gate, and
+  `/kiosk/forget` is the way back to a choice:
+  - `gateChoices()` — the full-page **"Choose your gate"** card picker, **operators only**,
+    shown *instead of* the terminal when no kiosk is bound. Entry-or-exit is a
+    start-of-shift decision, the answer has to reach the binding, and a barrier tablet wants
+    large targets.
+  - `pickableKiosks()` — a compact **kiosk dropdown** above the ENTRY/EXIT panes, for
+    anyone holding `kiosks.manage`. Staff pick which gate to *look at*, not which shift they
+    are working, so the terminal stays on screen behind the control. Gated on the
+    permission rather than the role so a role granted `kiosks.manage` gets it without a
+    second place to remember to update; `runnableKiosks()` is unbounded for a super admin,
+    which is why the gate on it matters.
+  - Kiosks that **cannot scan** — no lot, or no gate type — stay in the list, labelled
+    `no lot` / `no gate type`. They are what an admin opens the terminal to diagnose, and
+    hiding them would replace one dead end with a quieter one.
+  - Selecting navigates to `/?kiosk=<key>` as a plain GET. A Livewire round trip would be the
+    wrong tool: the binding is recorded by `ResolveKioskBinding` on the request, and choosing
+    a gate rebinds the lot, the broadcast channel and the scan direction at once.
+- The unbound state says what is actually missing rather than blaming a kiosk that was never
+  chosen. `scanBlocked()` in the view's JS is the single source of that answer for the
+  keyboard buffer, the manual field and `submitScan()`, checked most-fundamental first
+  (no kiosk → no lot → no gate type); each hint branch owns its own baseline, so a timer
+  cannot restore "Scan your card" onto a terminal that has no kiosk.
 - Passes `kioskKey`, `kioskType`, `kioskLotNumber`, `kioskName`, `kioskLotName`, and a
   `recentScans` list (persisted entries for that lot, newest first, up to 6 rows combining a
   `parked` and, if present, an `exit` event per entry — so the feed survives page refresh).
@@ -581,6 +605,9 @@ All components are **class-based** (Livewire 4). They render the Blade views und
   row so an operator can see at a glance which way each terminal faces.
 - Edit name/lot/type, **delink** (`parking_lot_id = null`), delete, and shows each kiosk's lot
   with floor/slot counts — the operator copies the `/?kiosk=<key>` URL for each terminal.
+- "Open kiosk" links to `/?kiosk=<key>`. Staff who already have the terminal open pick a gate
+  with the **kiosk dropdown** in §7.1 instead of coming back here — and once bound, that
+  dropdown is gone, so this button and Unbind are the two ends of the round trip.
 - `render()` loads kiosks eager-loaded with their lot.
 
 ### 7.7 `Admin\UserManager` — staff accounts (`/admin/users`)

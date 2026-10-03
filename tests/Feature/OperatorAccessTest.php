@@ -304,6 +304,28 @@ class OperatorAccessTest extends TestCase
         $this->get('/')->assertOk()->assertDontSee('Choose your gate');
     }
 
+    public function test_an_operator_gets_the_card_picker_and_not_the_staff_picker(): void
+    {
+        // The two controls are mutually exclusive by design, and neither appears once a gate
+        // is bound. The card picker replaces the whole terminal because choosing a gate is an
+        // operator's start-of-shift decision; the staff dropdown is a compact control above the
+        // gate panes. An operator holding both would be able to answer the same question two
+        // ways, and on an unbound terminal only the picker's answer reaches the scanner.
+        $this->actingAsOperator([$this->lotA]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Choose your gate')
+            ->assertDontSee('id="kiosk-picker"', false);
+
+        // Bound, the picker gives way to the terminal - and an operator still gets no staff
+        // dropdown, so the gate they are standing at is the gate they stay on.
+        $this->get('/?kiosk='.$this->entryA->key)
+            ->assertOk()
+            ->assertSee('id="scan-entry"', false)
+            ->assertDontSee('id="kiosk-picker"', false);
+    }
+
     // ── Signing in ─────────────────────────────────────────────────────────────
 
     public function test_an_operator_is_landed_at_their_gate_after_signing_in(): void
