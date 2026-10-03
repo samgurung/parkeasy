@@ -508,4 +508,85 @@ class OperatorAccessTest extends TestCase
             ->assertSee('Entry A')
             ->assertSee('This gate');
     }
+
+    public function test_a_super_admin_does_not_inherit_a_gate_bound_by_someone_else(): void
+    {
+        // The exception above is asked of the lot pivot, not of a permission, because
+        // Gate::before waves the super admin through every permission and the account is in
+        // no lot at all. Left on the permission test, a break-glass account inherited whatever
+        // the last person on that tablet was standing at - with the picker hidden, so the only
+        // way to any other gate was Unbind, and no error to say the terminal was not theirs.
+        $first = $this->operator([$this->lotA], ['email' => 'first@parkeasy.test']);
+
+        $this->actingAs($first);
+        $this->get(route('home', ['kiosk' => 'a-entry']))->assertOk();
+
+        $this->post(route('logout'));
+
+        $this->withCookie(ResolveKioskBinding::COOKIE_NAME, 'a-entry')
+            ->withCookie(ResolveKioskBinding::OWNER_COOKIE_NAME, (string) $first->id)
+            ->get(route('login'))
+            ->assertOk();
+
+        $this->signIn($this->superAdmin(['email' => 'root@parkeasy.test']));
+
+        // Unbound, and offered every gate in the app rather than none of them: the point of
+        // releasing it is that a super admin picks their gate like anyone else.
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('This gate')
+            ->assertSee('<select id="kiosk-picker"', false)
+            ->assertSee('Entry A')
+            ->assertSee('Entry B');
+
+        $this->assertNull(session('kiosk_key'));
+    }
+
+    public function test_a_super_admin_keeps_a_gate_they_opened_themselves(): void
+    {
+        // The counterpart, so releasing an inherited binding cannot be read as "a super admin
+        // is never bound". An explicit ?kiosk= is the account's own decision and carries no
+        // owner, so it stands for that session - including on a delinked kiosk, which is the
+        // broken terminal they are usually there to look at.
+        $this->actingAsSuperAdmin();
+
+        $this->get('/?kiosk=b-entry')
+            ->assertOk()
+            ->assertSee('Entry B')
+            ->assertSee('This gate');
+
+        $this->get('/')->assertOk()->assertSee('Entry B')->assertSee('This gate');
+
+        $spare = Kiosk::create([
+            'name' => 'Spare', 'key' => 'spare', 'type' => Kiosk::TYPE_ENTRY, 'parking_lot_id' => null,
+        ]);
+
+        $this->get('/?kiosk=spare')
+            ->assertOk()
+            ->assertSee('No parking lot is linked to this kiosk');
+    }
+
+    public function test_a_gate_is_inherited_by_accounts_in_the_same_lot_not_only_operators(): void
+    {
+        // The handover exception is lot membership, so it holds for a lot admin too: covering
+        // a shift on a tablet that the last operator left on their own lot's gate must not
+        // cost a re-bind. The super admin is excluded by having no lot, not by role.
+        $first = $this->operator([$this->lotA], ['email' => 'first@parkeasy.test']);
+
+        $this->actingAs($first);
+        $this->get(route('home', ['kiosk' => 'a-entry']))->assertOk();
+
+        $this->post(route('logout'));
+
+        $this->withCookie(ResolveKioskBinding::COOKIE_NAME, 'a-entry')
+            ->withCookie(ResolveKioskBinding::OWNER_COOKIE_NAME, (string) $first->id)
+            ->get(route('login'))
+            ->assertOk();
+
+        $this->signIn($this->lotAdmin([$this->lotA], ['email' => 'la@parkeasy.test']));
+
+        $this->get('/')->assertOk()->assertSee('Entry A')->assertSee('This gate');
+
+        $this->assertSame('a-entry', session('kiosk_key'));
+    }
 }

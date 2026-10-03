@@ -332,12 +332,22 @@ refused:
   printed QR link is put back at the gate rather than being logged out of it;
 - an **ownerless** binding, which is nobody's claim: a `?kiosk=` link followed while signed out,
   or a tablet carrying a cookie from before the stamp existed;
-- a gate the incoming account could stand at anyway (`can('operate')` or `can('view')`), which
-  is re-stamped for them. The gate belongs to the tablet, not the account, so a handover
-  between two operators of one lot must not cost a re-bind.
+- a gate in a lot the incoming account administers, which is re-stamped for them. The gate
+  belongs to the tablet, not the shift, so a handover between two operators — or a lot admin
+  covering a shift on their own lot's tablet — must not cost a re-bind.
+
+That third case is asked of `administeredLotIds()`, **not** of `can('operate')` or
+`can('view')`. Both of those are answered `true` for the super admin by `Gate::before`, and a
+break-glass account is attached to no lot at all, so it says nothing about whether the terminal
+it happens to be holding is its gate. Read that way, a super admin inherited whatever the last
+person on the tablet was standing at: no error, no 403, the picker hidden because something was
+bound, and Unbind as the only route to any other gate. A `null` lot list is that account, so
+"no restriction" is the one answer that is *not* a handover — and a super admin reaches a gate
+the same way as anyone else, by opening its `?kiosk=` URL.
 
 An explicit `?kiosk=` is never owner-checked: it carries no owner and is adopted outright, so
-re-binding a terminal is still just opening the other URL.
+re-binding a terminal is still just opening the other URL, and a super admin previewing a
+delinked kiosk does not lose it to the release rule.
 
 Because the middleware is appended to the `web` group it runs *before* route middleware, so it
 also resolves and remembers a `?kiosk=` link on a browser that is currently signed out. That

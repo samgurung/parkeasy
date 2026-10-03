@@ -59,11 +59,18 @@ use Symfony\Component\HttpFoundation\Response;
  * inherited binding is therefore dropped rather than adopted, and the terminal falls back to
  * offering this account its own gates.
  *
- * The owner is a stamp, never the authority. Whoever signs in at a terminal already standing
- * on a gate they are entitled to run keeps the binding and has it re-stamped for them - the
- * gate belongs to the tablet, not to the account, so a handover between two operators of one
- * lot must not cost a re-bind - and an absent owner means "not claimed yet", which is the
- * state a signed-out browser is in after following a printed link.
+ * The owner is a stamp, never the authority. A binding inside a lot the incoming account
+ * administers survives the sign-out that left it there, because the gate belongs to the
+ * tablet rather than to the shift and a handover between two operators of one lot must not
+ * cost a re-bind. An absent owner means "not claimed yet", which is the state a signed-out
+ * browser is in after following a printed link.
+ *
+ * That exception is scoped by lot membership, not by permission. `can('operate')` and
+ * `can('view')` both wave the super admin through, and a break-glass account is attached to
+ * no lot at all, so it says nothing about whether the terminal it happens to be holding is
+ * its gate: it would inherit whatever the last person on that tablet was standing at, with
+ * the picker hidden and no way to see the other gates but Unbind. A super admin is answered
+ * the same way as everyone else instead, and reaches a gate by opening its URL.
  */
 class ResolveKioskBinding
 {
@@ -170,10 +177,17 @@ class ResolveKioskBinding
             return false;
         }
 
-        // Same gate, new shift: keep it. Only a gate this account could never stand at is
-        // taken away, so the lot check below is the one answering what the owner stamp raises,
-        // rather than a second rule written here.
-        return ! $user->can('operate', $kiosk) && ! $user->can('view', $kiosk);
+        // Same gate, new shift: keep it. Asked of the lot pivot rather than of a permission,
+        // because Gate::before waves the super admin through every permission and a
+        // break-glass account is in no lot at all - which is exactly the account that must not
+        // be handed whatever the last person on this tablet was standing at. A null list is
+        // that account, so "no restriction" is the one answer that is not a handover.
+        //
+        // A delinked kiosk has no lot to be in, and casts to zero here, so it is inherited by
+        // nobody - which is why a super admin still reaches one by opening its URL.
+        $lotIds = $user->administeredLotIds();
+
+        return $lotIds === null || ! in_array((int) $kiosk->parking_lot_id, $lotIds, true);
     }
 
     /**
